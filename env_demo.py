@@ -1,4 +1,5 @@
-from environments.rl_environment import TestEnv,PickOrPlaceEnvWithoutLangReward
+from environments.rl_environment import TestEnv,PickOrPlaceEnvWithoutLangReward,SimplifyPickOrPlaceEnvWithoutLangReward,SimplifyPickEnvWithoutLangReward
+from environments.dummy_environment import dummypick
 import numpy as np
 import matplotlib.pyplot as plt
 from environments.utils import mouse_demo
@@ -6,29 +7,40 @@ from tasks.task import PutBlockInBowl
 from reward.detector import VILD
 import cv2
 import clip
-env = PickOrPlaceEnvWithoutLangReward(PutBlockInBowl)
+# env = PickOrPlaceEnvWithoutLangReward(PutBlockInBowl)
+# env = SimplifyPickEnvWithoutLangReward(render=True,multi_discrete=True)
+env = dummypick(render=True,multi_discrete=True)
+
 np.random.seed(1)
 
 
-category_names = ['yellow block', 'green block', 'blue block', 'yellow bowl', 'green bowl', 'blue bowl']
-obs = env.reset()
+obs,_ = env.reset()
 fig, axs = plt.subplots(1, 2, figsize=(13, 7))
 plt.cla()
 while True:
-    # print("obs:",obs["image"].dtype)
+    # observation = env.super_get_observation()
+    # print(observation["image"].shape)
+    # image = observation["image"]
+    image = env.render()
+    # print("image:",image.dtype,image.min(),image.max(),image.shape)
     # print(obs['object_in_hand'])
-    expert = mouse_demo(obs["image"][:,:,:3],obs["image"][:,:,3])
+
+    expert = mouse_demo(image,image)
     pick_point = expert.get_pick_point()
 
-    act= np.array([obs['object_in_hand'][0],pick_point[0]/224,pick_point[1]/224])
-    obs, reward, done, info = env.step(act)
-    axs[0].imshow(obs["image"][:,:,:3])
-    axs[1].imshow(obs["image"][:,:,3])
+    act= np.array([obs['object_in_hand'][0],pick_point[0],pick_point[1]])
+    obs, reward, done,_, info = env.step(act)
+    # axs[0].imshow(obs["image"][:,:,:3])
+    # axs[1].imshow(obs["image"][:,:,3])
+    print("#################goal:",obs["lang_goal"])
+    print("reward:",reward)
+    print("info:",info)
     plt.pause(1)
     
     
     if done:
         break
+
 # plt.subplot(1, 3, 1)
 # img = obs["image"]
 # plt.title('color-view')

@@ -9,17 +9,24 @@ import os
 import time
 from scipy.interpolate import interp2d
 import cv2
-# import gymnasium as gym
-import gym
+# import gym
+import gymnasium as gym
 class PickPlaceEnv(gym.Env):
-  def __init__(self,task):
-    self.dt = 1/480
+  def __init__(self,task,render=False):
+    self.dt = 1/480 * 2
     self.sim_step = 0
 
     # Configure and start PyBullet.
     # python3 -m pybullet_utils.runServer
+
+    # pybullet.connect(pybullet.GUI)  # pybullet.GUI for local GUI.
+    if render:
+      pybullet.connect(pybullet.GUI)  # pybullet.GUI for local GUI.
+    else:
+      pybullet.connect(pybullet.DIRECT)  # pybullet.GUI for local GUI.
     # pybullet.connect(pybullet.SHARED_MEMORY)  # pybullet.GUI for local GUI.
-    pybullet.connect(pybullet.GUI)  # pybullet.GUI for local GUI.
+    # pybullet.setRealTimeSimulation(0)
+    pybullet.configureDebugVisualizer(pybullet.COV_ENABLE_RENDERING, 0)
     pybullet.configureDebugVisualizer(pybullet.COV_ENABLE_GUI, 0)
     pybullet.setPhysicsEngineParameter(enableFileCaching=0)
     assets_path = os.path.dirname(os.path.abspath(""))
@@ -88,18 +95,18 @@ class PickPlaceEnv(gym.Env):
     print("obj pos",self.obj_pos)
     print("lang goal",self.lang_goal)
     self.step_count = 0
-    return obs
+    return obs,{}
 
-  def servoj(self, joints):
+  def servoj(self, joints,gains_factor=1):
     """Move to target joint positions with position control."""
     pybullet.setJointMotorControlArray(
       bodyIndex=self.robot_id,
       jointIndices=self.joint_ids,
       controlMode=pybullet.POSITION_CONTROL,
       targetPositions=joints,
-      positionGains=[0.01]*6)
+      positionGains=[gains_factor*2*0.01]*6)
 
-  def movep(self, position):
+  def movep(self, position,gains_factor=1):
     """Move to target end effector position."""
     joints = pybullet.calculateInverseKinematics(
         bodyUniqueId=self.robot_id,
@@ -108,7 +115,7 @@ class PickPlaceEnv(gym.Env):
         targetOrientation=pybullet.getQuaternionFromEuler(self.home_ee_euler),
         maxNumIterations=100)
 
-    self.servoj(joints)
+    self.servoj(joints,gains_factor)
 
   def step(self, action=None):
     print("lang goal",self.lang_goal)

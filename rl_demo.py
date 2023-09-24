@@ -8,6 +8,7 @@ from reward.detector import VILD
 import cv2
 import clip
 from stable_baselines3 import SAC,PPO,TD3
+from agents.LLMRL import LLMSAC
 from agents.PolicyNet import CustomCombinedExtractor
 from stable_baselines3.common.callbacks import CheckpointCallback
 env = PickOrPlaceEnvWithoutLangReward(PutBlockInBowl)
@@ -27,24 +28,22 @@ checkpoint_callback = CheckpointCallback(
   save_replay_buffer=True,
   save_vecnormalize=True,
 )
+step = 2000
 if policy_name == "sac":
-    model = SAC("MultiInputPolicy", 
+    model = LLMSAC("MultiInputPolicy", 
                 env, 
                 policy_kwargs=policy_kwargs, 
                 verbose=1,
+                learning_starts=100,
                 batch_size=16,
-                buffer_size=1000,
-                train_freq=(1,"episode"),
+                gradient_steps=10,
+                buffer_size=step,
+                epsilon_llm=0.4,
+                epsilon_decrease=0.0,
+                train_freq=(1,"step"),
                 tensorboard_log="tmp/sac_tb/",
                 )
-elif policy_name == "ppo":
-    model = PPO("MultiInputPolicy",
-                env,
-                
-                policy_kwargs=policy_kwargs,
-                verbose=1,
-                tensorboard_log="tmp/ppo_tb/",
-                )
-model.learn(total_timesteps=2000,log_interval=4,callback=checkpoint_callback)
+
+model.learn(total_timesteps=step,log_interval=4,callback=checkpoint_callback)
 
 

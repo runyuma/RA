@@ -39,7 +39,8 @@ def get_description(env,action,pick_success,pos,last_pos):
             description = "put {} on {}".format(pick,place)
     return description
 
-def motion_descriptor(lang_goal,found_obj,info):
+def motion_descriptor(lang_goal,info):
+    found_obj = info["obj_position"][-1]
     test_prompt = 'A robot arm is attempting to manipulate an environment with the goal of ' + lang_goal+ '.\n'
     test_prompt += "the environment with size (224,224). \n"
     test_prompt += "A detector named VILD is responsible for object detection within the environment. Prior to the robot arm's actions, VILD has detected the following objects and their respective positions:"
@@ -56,7 +57,7 @@ def motion_descriptor(lang_goal,found_obj,info):
     test_prompt += "Now, given these details, please provide the next action that the robot arm should take to fulfill the language goal. If the robot arm didn't pick up an object in the previous step, it should pick up an object. If it has already picked up an object, it should be placed."
     test_prompt += "Previous steps might have some mistake and new actions should try to correct this mistake.\n"
     # test_prompt += "reply briefly"
-    print(test_prompt)
+    # print(test_prompt)
     completion = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
         messages=[
@@ -67,7 +68,8 @@ def motion_descriptor(lang_goal,found_obj,info):
         )
     # print(completion["choices"][0]["message"]["content"])
     return completion["choices"][0]["message"]["content"]
-def translator(motion_description,found_obj):
+def translator(motion_description,info):
+    found_obj = info["obj_position"][-1]
     test_prompt = motion_description+"\n"
     test_prompt += "answer without explanation:\n"
     test_prompt += "what is the the motion primitives for this action(choose from {pick/place})?\n"

@@ -5,12 +5,13 @@ from torch.nn import functional as F
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 import numpy as np
 import gym
+from PIL import Image
 
 
 class CLIP():
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    clip_model, clip_preprocess = clip.load("ViT-B/32",device=device)
-    clip_model.cuda().eval()
+    # clip_model, clip_preprocess = clip.load("ViT-B/32",device=device)
+    # clip_model.cuda().eval()
 
 class CustomCombinedExtractor(BaseFeaturesExtractor):
     def __init__(self, observation_space: gym.spaces.Dict,features_dim: int = 128):
@@ -22,14 +23,14 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
         device = "cuda" 
         self.device = device
 
-        self.clip_model = clip.load("ViT-B/32",device=device)[0]
+        self.clip_model,self.clip_preprocess = clip.load("ViT-B/32",device=device)
         self.clip_model.eval()
         
         self.Resnet_pick = ResNet18()
         # self.Resnet_place = ResNet18()
 
         # self.fc1 =  nn.Linear(1539, 512)
-        self.fc1 =  nn.Linear(1027, 512)
+        self.fc1 =  nn.Linear(1536, 512)
         self.fc2 =  nn.Linear(512, 256)
         self.fc3 =  nn.Linear(256, 128)
 
@@ -40,21 +41,28 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
         img = observation['image']
         obj_inhand = observation['object_in_hand']
         lang_goal = observation['lang_goal']
-        llm_recommendation = observation['lang_recommendation']
-        if type(llm_recommendation) == torch.Tensor:
-            lang_recommendation = llm_recommendation.cuda()
-        elif type(llm_recommendation) == np.ndarray:
-            lang_recommendation = torch.from_numpy(observation['lang_recommendation']).cuda()
-        print(img.shape,img.dtype,img.device)
+        clip_image = observation['clip_image']
+        # llm_recommendation = observation['lang_recommendation']
+        # if type(llm_recommendation) == torch.Tensor:
+        #     lang_recommendation = llm_recommendation.cuda()
+        # elif type(llm_recommendation) == np.ndarray:
+        #     lang_recommendation = torch.from_numpy(observation['lang_recommendation']).cuda()
+        # print(img.shape,img.dtype,img.device)
         # print(obj_inhand.shape,obj_inhand.dtype,obj_inhand.device)
 
         # clip
-        with torch.no_grad():
-          # print(lang_goal.shape,lang_goal.dtype,lang_goal.device)
-          if self.device == "cuda":
-            text_embeddings =  self.clip_model.encode_text(lang_goal.long())
-          else:
-            text_embeddings =  self.clip_model.encode_text(lang_goal.long()).cuda()
+        # with torch.no_grad():
+        #   # print(lang_goal.shape,lang_goal.dtype,lang_goal.device)
+        #   if self.device == "cuda":
+        #     text_embeddings =  self.clip_model.encode_text(lang_goal.long())
+        #     # clip_image = img[...,0:3]
+        #     # print("clip image************",self.clip_preprocess(clip_image).shape)
+        #     # clip_image = self.clip_preprocess(Image.fromarray(img)).unsqueeze(0).to(self.device)
+        #     # image_features = self.clip_model.encode_image(img).cuda()
+        #   else:
+        #     text_embeddings =  self.clip_model.encode_text(lang_goal.long()).cuda()
+        text_embeddings =  lang_goal.cuda()
+            
           # print(text_embeddings.shape,text_embeddings.dtype,text_embeddings.device)
         # resnet
         if len(img.shape) == 3:
@@ -67,7 +75,7 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
         pick = pick_place[:,0:256]*(1-obj_inhand)
         place = pick_place[:,256:]*(obj_inhand)
         # concat
-        out = torch.cat((text_embeddings,pick,place,lang_recommendation),dim=1)
+        out = torch.cat((clip_image,text_embeddings,pick,place),dim=1)
         out = F.relu(self.fc1(out))
         out = F.relu(self.fc2(out))
         out = F.relu(self.fc3(out))
