@@ -1,9 +1,6 @@
-if __name__ == "__main__":
-  from robot import Robotiq2F85
-  from utils import *
-else:
-  from environments.robot import Robotiq2F85
-  from environments.utils import *
+from environments.robot import Robotiq2F85
+from environments.utils import *
+from tasks.task import PutBlockInBowl
 import pybullet
 import pybullet_data
 import numpy as np
@@ -14,14 +11,20 @@ import cv2
 # import gym
 import gymnasium as gym
 class PickPlaceEnv(gym.Env):
-  def __init__(self,task = None,render=False):
+  def __init__(self,task,render=False):
     self.dt = 1/480 * 2
     self.sim_step = 0
 
+    # Configure and start PyBullet.
+    # python3 -m pybullet_utils.runServer
+
+    # pybullet.connect(pybullet.GUI)  # pybullet.GUI for local GUI.
     if render:
       pybullet.connect(pybullet.GUI)  # pybullet.GUI for local GUI.
     else:
       pybullet.connect(pybullet.DIRECT)  # pybullet.GUI for local GUI.
+    # pybullet.connect(pybullet.SHARED_MEMORY)  # pybullet.GUI for local GUI.
+    # pybullet.setRealTimeSimulation(0)
     pybullet.configureDebugVisualizer(pybullet.COV_ENABLE_RENDERING, 0)
     pybullet.configureDebugVisualizer(pybullet.COV_ENABLE_GUI, 0)
     pybullet.setPhysicsEngineParameter(enableFileCaching=0)
@@ -35,12 +38,7 @@ class PickPlaceEnv(gym.Env):
     self.ee_link_id = 9  # Link ID of UR5 end effector.
     self.tip_link_id = 10  # Link ID of gripper finger tips.
     self.gripper = None
-    self.lang_goal = None
-    self.obj_name_to_id = {}
-    if task is not None:
-      self.task  = task(COLORS,BOUNDS)
-    else:
-      self.task = None
+    self.task  = task(COLORS,BOUNDS)
     
 
   def reset(self):
@@ -74,25 +72,19 @@ class PickPlaceEnv(gym.Env):
     plane_visual = pybullet.createVisualShape(pybullet.GEOM_BOX, halfExtents=[0.3, 0.3, 0.001])
     plane_id = pybullet.createMultiBody(0, plane_shape, plane_visual, basePosition=[0, -0.5, 0])
     pybullet.changeVisualShape(plane_id, -1, rgbaColor=[0.2, 0.2, 0.2, 1.0])
-    if self.task is not None:
-      self.task.reset(self)
 
-    # arm init position
+    self.task.reset(self)
+
+    # Re-enable rendering.
     pybullet.configureDebugVisualizer(pybullet.COV_ENABLE_RENDERING, 1)
     place_xyz = np.float32([0, -0.2, 0.4])
     ee_xyz = np.float32(pybullet.getLinkState(self.robot_id, self.tip_link_id)[0])
-
     while np.linalg.norm(place_xyz - ee_xyz) > 0.01:
       self.movep(place_xyz)
       self.step_sim_and_render()
       ee_xyz = np.float32(pybullet.getLinkState(self.robot_id, self.tip_link_id)[0])
-
-    for _ in range(100):
+    for _ in range(200):
       pybullet.stepSimulation()
-    
-    # Get observation.
-
-    
     obs = self.get_observation()
     self.reset_reward(obs)
 
@@ -257,44 +249,12 @@ class PickPlaceEnv(gym.Env):
                                              zrange)
     set_alpha and self.set_alpha_transparency(1)
     return color
-  
   def reset_reward(self,obs):
-    pass
+    raise NotImplementedError
   def get_reward(self,obs,action):
     raise NotImplementedError
 
-  def get_depth(self, bounds, pixel_size):
-    # start_time = time.time()
-    color, depth, position, orientation, intrinsics = self.render_image()
-    # # Get heightmaps and colormaps.
-    points = self.get_pointcloud(depth, intrinsics)
-    position = np.float32(position).reshape(3, 1)
-    rotation = pybullet.getMatrixFromQuaternion(orientation)
-    rotation = np.float32(rotation).reshape(3, 3)
-    transform = np.eye(4)
-    transform[:3, :] = np.hstack((rotation, position))
-    points = self.transform_pointcloud(points, transform)
-    heightmap, colormap, xyzmap = self.get_heightmap(points, color, BOUNDS, PIXEL_SIZE)
-    # print("get depth time:",time.time()-start_time)
-    return heightmap, colormap, xyzmap
-  
-  def get_image(self):
-    image_size=[224, 224]
-    focal_length=1800.
-    intrinsics=(focal_length, 0, focal_length, 0, focal_length, focal_length, 0, 0, 1)
-    position=(0, -0.5, 4.8)
-    orientation=(0, np.pi, -np.pi / 2)
-    zrange=(0.01, 1.)
-    # self.set_alpha_transparency(0)
-    color, _, _, _, _ = self.render_image_top(image_size,
-                                             intrinsics,
-                                             position,
-                                             orientation,
-                                             zrange)
-    # self.set_alpha_transparency(1)
-    image = np.flipud( color.transpose(1, 0, 2))
-    return image
-  
+
   def get_observation(self):
     observation = {}
     start_time = time.time()
@@ -334,6 +294,7 @@ class PickPlaceEnv(gym.Env):
     return observation
 
   def render_image(self, image_size=(720, 720), intrinsics=(360., 0, 360., 0, 360., 360., 0, 0, 1)):
+
     # Camera parameters.
     position = (0, -0.85, 0.4)
     orientation = (np.pi / 4 + np.pi / 48, np.pi, np.pi)
@@ -387,7 +348,7 @@ class PickPlaceEnv(gym.Env):
       depth += np.random.normal(0, 0.003, depth.shape)
 
     intrinsics = np.float32(intrinsics).reshape(3, 3)
-    return depth
+    return color, depth, position, orientation, intrinsics
 
   def render_image_top(self,
                        image_size=(240, 240),
