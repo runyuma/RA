@@ -90,19 +90,21 @@ class PickPlaceEnv(gym.Env):
     for _ in range(100):
       pybullet.stepSimulation()
     
-    # Get observation.
 
-    
+    # Get observation.
     obs = self.get_observation()
     self.reset_reward(obs)
-
-    self.obj_pos = {}
-    for key in self.obj_name_to_id.keys():
-      self.obj_pos[key] = pybullet.getBasePositionAndOrientation(self.obj_name_to_id[key])[0]
-    print("obj pos",self.obj_pos)
+    # self.obj_pos = self.get_object_position()
+    
     print("lang goal",self.lang_goal)
     self.step_count = 0
     return obs,{}
+  
+  def get_object_position(self):
+    obj_pos = {}
+    for key in self.obj_name_to_id.keys():
+      obj_pos[key] = pybullet.getBasePositionAndOrientation(self.obj_name_to_id[key])[0]
+    return obj_pos
 
   def servoj(self, joints,gains_factor=1):
     """Move to target joint positions with position control."""
@@ -276,7 +278,7 @@ class PickPlaceEnv(gym.Env):
     points = self.transform_pointcloud(points, transform)
     heightmap, colormap, xyzmap = self.get_heightmap(points, color, BOUNDS, PIXEL_SIZE)
     # print("get depth time:",time.time()-start_time)
-    return heightmap, colormap, xyzmap
+    return heightmap
   
   def get_image(self):
     image_size=[224, 224]
@@ -387,7 +389,7 @@ class PickPlaceEnv(gym.Env):
       depth += np.random.normal(0, 0.003, depth.shape)
 
     intrinsics = np.float32(intrinsics).reshape(3, 3)
-    return depth
+    return color, depth, position, orientation, intrinsics
 
   def render_image_top(self,
                        image_size=(240, 240),

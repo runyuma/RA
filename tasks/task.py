@@ -12,6 +12,7 @@ class PutBlockInBowl():
         self.colors = colors
         self.bounds = bounds
         self.category_names = ['yellow block', 'green block', 'blue block', 'yellow bowl', 'green bowl', 'blue bowl',]
+        self.goal_num = 2
                             #    "blue block in green bowl",
                             #    "green block in blue bowl", 
                             #    "yellow block in blue bowl", 
@@ -106,6 +107,7 @@ class PickBlock():
         self.lang_template = "pick the {pick}"
         self.colors = colors
         self.bounds = bounds
+        self.goal_num = 1
         self.category_names = ['yellow block', 'green block', 'blue block']
         self.config =  {'pick':  ['yellow block', 'green block', 'blue block'],'place':[]}
     def reset(self,env):
