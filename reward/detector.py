@@ -16,8 +16,9 @@ class VILD():
         self.clip_model, self.clip_preprocess = clip.load("ViT-B/32")
         self.clip_model.cuda().eval()
         # init vild model
-        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.2)
-        session = tf.Session(graph=tf.Graph(), config=tf.ConfigProto(gpu_options=gpu_options))
+        # gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.1)
+        # session = tf.Session(graph=tf.Graph(), config=tf.ConfigProto(gpu_options=gpu_options))
+        session = tf.Session(graph=tf.Graph())
         saved_model_dir = "./reward/image_path_v2"
         _ = tf.saved_model.loader.load(session, ["serve"], saved_model_dir)
         self.session = session

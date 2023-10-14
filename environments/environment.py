@@ -2,7 +2,7 @@ if __name__ == "__main__":
   from robot import Robotiq2F85
   from utils import *
 else:
-  from environments.robot import Robotiq2F85
+  from environments.robot import Robotiq2F85,Suction
   from environments.utils import *
 import pybullet
 import pybullet_data
@@ -14,7 +14,7 @@ import cv2
 # import gym
 import gymnasium as gym
 class PickPlaceEnv(gym.Env):
-  def __init__(self,task = None,render=False):
+  def __init__(self,task = None,render=False,ee = "gripper"):
     self.dt = 1/480 * 2
     self.sim_step = 0
 
@@ -32,6 +32,7 @@ class PickPlaceEnv(gym.Env):
 
     self.home_joints = (np.pi / 2, -np.pi / 2, np.pi / 2, -np.pi / 2, 3 * np.pi / 2, 0)  # Joint angles: (J0, J1, J2, J3, J4, J5).
     self.home_ee_euler = (np.pi, 0, np.pi)  # (RX, RY, RZ) rotation in Euler angles.
+    self.ee_type = ee
     self.ee_link_id = 9  # Link ID of UR5 end effector.
     self.tip_link_id = 10  # Link ID of gripper finger tips.
     self.gripper = None
@@ -63,11 +64,20 @@ class PickPlaceEnv(gym.Env):
       pybullet.resetJointState(self.robot_id, self.joint_ids[i], self.home_joints[i])
 
     # Add gripper.
-    if self.gripper is not None:
-      while self.gripper.constraints_thread.is_alive():
-        self.constraints_thread_active = False
-    self.gripper = Robotiq2F85(self.robot_id, self.ee_link_id)
-    self.gripper.release()
+    if self.ee_type == "gripper":
+      if self.gripper is not None:
+        while self.gripper.constraints_thread.is_alive():
+          self.constraints_thread_active = False
+      self.gripper = Robotiq2F85(self.robot_id, self.ee_link_id)
+      self.gripper.release()
+    elif self.ee_type == "suction":
+      if self.gripper is not None:
+        while self.gripper.constraints_thread.is_alive():
+          self.constraints_thread_active = False
+      self.gripper = Suction(self.robot_id, self.ee_link_id)
+      self.gripper.release()
+      
+
 
     # Add workspace.
     plane_shape = pybullet.createCollisionShape(pybullet.GEOM_BOX, halfExtents=[0.3, 0.3, 0.001])
@@ -76,6 +86,9 @@ class PickPlaceEnv(gym.Env):
     pybullet.changeVisualShape(plane_id, -1, rgbaColor=[0.2, 0.2, 0.2, 1.0])
     if self.task is not None:
       self.task.reset(self)
+    if self.ee_type == "suction":
+      obj_ids = self.obj_name_to_id.values()
+      self.gripper.set_objid(obj_ids)
 
     # arm init position
     pybullet.configureDebugVisualizer(pybullet.COV_ENABLE_RENDERING, 1)

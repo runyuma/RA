@@ -1,5 +1,5 @@
 # from environments.rl_environment import TestEnv,PickOrPlaceEnvWithoutLangReward,SimplifyPickOrPlaceEnvWithoutLangReward,SimplifyPickEnvWithoutLangReward
-from environments.pickplace_environment import SimplifyPickEnvWithoutLangReward
+from environments.pickplace_environment import SimplifyPickEnvWithoutLangReward,SimplifyPickOrPlaceEnvWithoutLangReward
 from environments.dummy_environment import dummypick
 import numpy as np
 import matplotlib.pyplot as plt
@@ -8,7 +8,7 @@ from tasks.task import PutBlockInBowl
 import cv2
 import sys
 # env = PickOrPlaceEnvWithoutLangReward(PutBlockInBowl)
-env = SimplifyPickEnvWithoutLangReward(render=True,multi_discrete=True)
+env = SimplifyPickOrPlaceEnvWithoutLangReward(render=True,multi_discrete=True,scale_action=True,scale_obs=True)
 # env = dummypick(render=True,multi_discrete=True)
 
 np.random.seed(1)
@@ -25,10 +25,16 @@ while True:
     # print("image:",image.dtype,image.min(),image.max(),image.shape)
     # print(obs['object_in_hand'])
     primitive = int(sys.stdin.readline().strip())
-    expert = mouse_demo(image,image)
-    pick_point = expert.get_pick_point()
+    if primitive != 2:
+        expert = mouse_demo(image,image)
+        pick_point = expert.get_pick_point()
+        
+        act= np.array([primitive,pick_point[0],pick_point[1]])
+        if env.scale_action:
+            act[1:] = act[1:]/224
+    else:
+        act = env.get_expert_demonstration()
     
-    act= np.array([primitive,pick_point[0],pick_point[1]])
     obs, reward, done,_, info = env.step(act)
     # axs[0].imshow(obs["image"][:,:,:3])
     # axs[1].imshow(obs["image"][:,:,3])

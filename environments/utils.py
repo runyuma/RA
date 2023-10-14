@@ -1,17 +1,25 @@
 import numpy as np
 import cv2
-def pix_to_xyz(pixel, height, bounds, pixel_size, skip_height=False,pick = True):
+def pix_to_xyz(pixel, height, bounds, pixel_size, skip_height=False,pick = True,ee = "gripper"):
     """Convert from pixel location on heightmap to 3D position."""
     u, v = pixel
     x = bounds[0, 0] + v * pixel_size
     y = bounds[1, 1] - u * pixel_size
+
     if not skip_height:
-        if pick:
-            z = bounds[2, 0] + height[u, v] - 0.02
-            
+        if ee == "gripper":
+            if pick:
+                z = bounds[2, 0] + height[u, v] - 0.02
+            else:
+                z = bounds[2, 0] + height[u, v] + 0.06
+            z = np.clip(z,0.02,0.15)
         else:
-            z = bounds[2, 0] + height[u, v] + 0.04
-        z = np.clip(z,0.01,0.15)
+            if pick:
+                z = bounds[2, 0] + height[u, v] - 0.005
+            else:
+                z = bounds[2, 0] + height[u, v] + 0.04
+            z = np.clip(z,0.005,0.15)
+            z = z - 0.06# offset
     else:
         z = 0.0
     return [x, y, z]

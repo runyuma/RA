@@ -6,3 +6,7 @@ register(
     entry_point="environments.rl_environment:SimplifyPickOrPlaceEnvWithoutLangReward",
 
 )
+register(
+    id="SimplePick-v0",
+    entry_point="environments.pickplace_environment:SimplifyPickEnvWithoutLangReward",
+)

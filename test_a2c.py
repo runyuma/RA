@@ -15,24 +15,27 @@ import gymnasium as gym
 from environments.dummy_environment import dummypick
 # import gym
 # env = SimplifyPickEnvWithoutLangReward(render=True,multi_discrete=True)
-env = dummypick(render=True,multi_discrete=False,scale_obs=True,obj_num=1)
+env = dummypick(render=True,multi_discrete=False,scale_obs=True,obj_num=3)
 policy_name = "a2c"
-checkpoint_callback = CheckpointCallback(
-  save_freq=500000,
-  save_path="tmp/"+policy_name+"_models/",
-  name_prefix="rl_model",
-  save_replay_buffer=True,
-  save_vecnormalize=True,
-)
-policy_kwargs = dict(activation_fn=th.nn.ReLU,
-                     net_arch=[256,256,256,256,256,256]
-                    # net_arch=[64,64,64,64]
-                     )
+# checkpoint_callback = CheckpointCallback(
+#   save_freq=500000,
+#   save_path="tmp/"+policy_name+"_models/",
+#   name_prefix="rl_model",
+#   save_replay_buffer=True,
+#   save_vecnormalize=True,
+# )
+# policy_kwargs = dict(activation_fn=th.nn.ReLU,
+#                      net_arch=[256,256,256,256,256,256]
+#                     # net_arch=[64,64,64,64]
+#                      )
 
-model= A2C(
+model= SAC(
     "MultiInputPolicy",
     env,
-    n_steps=500,
+    learning_rate=0.0006,
+    gamma=0.9,
+    train_freq = 1,
+    # gradient_steps=-1,
     tensorboard_log="tmp/a2c_tb/",
 )
-model.learn(total_timesteps=1000000,callback=checkpoint_callback,tb_log_name= "nstep 500 dummy env")
+model.learn(total_timesteps=30000,tb_log_name= "dummy env")

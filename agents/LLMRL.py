@@ -26,10 +26,9 @@ class LLMSAC(SAC):
         env: Union[GymEnv, str],
         learning_rate: Union[float, Schedule] = 3e-4,
         buffer_size: int = 1_000_000,  # 1e6
-        learning_starts: int = 50,
+        learning_starts: int = 100,
         batch_size: int = 256,
-        epsilon_llm: float = 0.2,
-        epsilon_decrease: float = 0.001,
+        epsilon_llm: float = 0.0,
         tau: float = 0.005,
         gamma: float = 0.99,
         train_freq: Union[int, Tuple[int, str]] = 1,
@@ -53,7 +52,7 @@ class LLMSAC(SAC):
         _init_setup_model: bool = True,
     ):
         self.epsilon_llm = epsilon_llm
-        self.epsilon_decrease = epsilon_decrease
+
         super().__init__(
             policy,
             env,
@@ -83,157 +82,28 @@ class LLMSAC(SAC):
             device,
             _init_setup_model,
         )
-    def collect_rollouts(
-        self,
-        env: VecEnv,
-        callback: BaseCallback,
-        train_freq: TrainFreq,
-        replay_buffer: ReplayBuffer,
-        action_noise: Optional[ActionNoise] = None,
-        learning_starts: int = 0,
-        log_interval: Optional[int] = None,
-    ) -> RolloutReturn:
-        """
-        Collect experiences and store them into a ``ReplayBuffer``.
-
-        :param env: The training environment
-        :param callback: Callback that will be called at each step
-            (and at the beginning and end of the rollout)
-        :param train_freq: How much experience to collect
-            by doing rollouts of current policy.
-            Either ``TrainFreq(<n>, TrainFrequencyUnit.STEP)``
-            or ``TrainFreq(<n>, TrainFrequencyUnit.EPISODE)``
-            with ``<n>`` being an integer greater than 0.
-        :param action_noise: Action noise that will be used for exploration
-            Required for deterministic policy (e.g. TD3). This can also be used
-            in addition to the stochastic policy for SAC.
-        :param learning_starts: Number of steps before learning for the warm-up phase.
-        :param replay_buffer:
-        :param log_interval: Log data every ``log_interval`` episodes
-        :return:
-        """
-        # Switch to eval mode (this affects batch norm / dropout)
-        self.policy.set_training_mode(False)
-
-        num_collected_steps, num_collected_episodes = 0, 0
-
-        assert isinstance(env, VecEnv), "You must pass a VecEnv"
-        assert train_freq.frequency > 0, "Should at least collect one step or episode."
-
-        if env.num_envs > 1:
-            assert train_freq.unit == TrainFrequencyUnit.STEP, "You must use only one env when doing episodic training."
-
-        # Vectorize action noise if needed
-        if action_noise is not None and env.num_envs > 1 and not isinstance(action_noise, VectorizedActionNoise):
-            action_noise = VectorizedActionNoise(action_noise, env.num_envs)
-
-        if self.use_sde:
-            self.actor.reset_noise(env.num_envs)
-
-        callback.on_rollout_start()
-        continue_training = True
-        while should_collect_more_steps(train_freq, num_collected_steps, num_collected_episodes):
-            if self.use_sde and self.sde_sample_freq > 0 and num_collected_steps % self.sde_sample_freq == 0:
-                # Sample a new noise matrix
-                self.actor.reset_noise(env.num_envs)
-
-            # Select action randomly or according to policy
-            # print([a for a in dir(env) if not a.startswith('__')])
-            llm_expert = False
-            if self.num_timesteps < learning_starts:
-                llm_expert = True
-            else:
-                random_number = np.random.rand()
-                print("*******************random_number:",random_number)
-                if random_number < self.epsilon_llm:
-                    llm_expert = True
-                    self.epsilon_llm -= self.epsilon_decrease 
-                    self.epsilon_llm = max(self.epsilon_llm,0.05)
-            
-            if llm_expert:
-                
-                actions, buffer_actions = self.llm_action(env)
-            else:
-                actions, buffer_actions = self._sample_action(learning_starts, action_noise, env.num_envs)
-
-            # Rescale and perform action
-            new_obs, rewards, dones, infos = env.step(actions)
-
-            
-
-            self.num_timesteps += env.num_envs
-            num_collected_steps += 1
-
-            # Give access to local variables
-            callback.update_locals(locals())
-            # Only stop training if return value is False, not when it is None.
-            if callback.on_step() is False:
-                return RolloutReturn(num_collected_steps * env.num_envs, num_collected_episodes, continue_training=False)
-
-            # Retrieve reward and episode length if using Monitor wrapper
-            self._update_info_buffer(infos, dones)
-
-            # Store data in replay buffer (normalized action and unnormalized observation)
-            self._store_transition(replay_buffer, buffer_actions, new_obs, rewards, dones, infos)
-
-            self._update_current_progress_remaining(self.num_timesteps, self._total_timesteps)
-
-            # For DQN, check if the target network should be updated
-            # and update the exploration schedule
-            # For SAC/TD3, the update is dones as the same time as the gradient update
-            # see https://github.com/hill-a/stable-baselines/issues/900
-            self._on_step()
-
-            for idx, done in enumerate(dones):
-                if done:
-                    # Update stats
-                    num_collected_episodes += 1
-                    self._episode_num += 1
-
-                    if action_noise is not None:
-                        kwargs = dict(indices=[idx]) if env.num_envs > 1 else {}
-                        action_noise.reset(**kwargs)
-
-                    # Log training infos
-                    if log_interval is not None and self._episode_num % log_interval == 0:
-                        self._dump_logs()
-        callback.on_rollout_end()
-
-        return RolloutReturn(num_collected_steps * env.num_envs, num_collected_episodes, continue_training)
-
     def _sample_action(
         self,
         learning_starts: int,
         action_noise: Optional[ActionNoise] = None,
         n_envs: int = 1,
     ) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Sample an action according to the exploration policy.
-        This is either done by sampling the probability distribution of the policy,
-        or sampling a random action (from a uniform distribution over the action space)
-        or by adding noise to the deterministic output.
-
-        :param action_noise: Action noise that will be used for exploration
-            Required for deterministic policy (e.g. TD3). This can also be used
-            in addition to the stochastic policy for SAC.
-        :param learning_starts: Number of steps before learning for the warm-up phase.
-        :param n_envs:
-        :return: action to take in the environment
-            and scaled action that will be stored in the replay buffer.
-            The two differs when the action space is not normalized (bounds are not [-1, 1]).
-        """
-        # Select action randomly or according to policy
         if self.num_timesteps < learning_starts and not (self.use_sde and self.use_sde_at_warmup):
             # Warmup phase
             unscaled_action = np.array([self.action_space.sample() for _ in range(n_envs)])
-            # print("sample action in _sample_action off_policy_algorithm.py")
         else:
-            # Note: when using continuous actions,
-            # we assume that the policy uses tanh to scale the action
-            # We use non-deterministic action in the case of SAC, for TD3, it does not matter
-            # print("predicting action in _sample_action off_policy_algorithm.py")
-            unscaled_action, _ = self.predict(self._last_obs, deterministic=False)
-
+            if self.epsilon_llm > 0:
+                if np.random.rand() < self.epsilon_llm:
+                    # print("*******************USE_EXPERT")
+                    USE_EXPERT = True
+                else:
+                    USE_EXPERT = False
+            else:
+                USE_EXPERT = False
+            if not USE_EXPERT:
+                unscaled_action, _ = self.predict(self._last_obs, deterministic=False)
+            else:
+                unscaled_action = self.expert_explore(self.env)
         # Rescale the action from [low, high] to [-1, 1]
         if isinstance(self.action_space, spaces.Box):
             scaled_action = self.policy.scale_action(unscaled_action)
@@ -244,15 +114,19 @@ class LLMSAC(SAC):
 
             # We store the scaled action in the buffer
             buffer_action = scaled_action
-            action = self.policy.unscale_action(scaled_action)         
-
+            action = self.policy.unscale_action(scaled_action)
+        else:
+            # Discrete case, no need to normalize or clip
+            buffer_action = unscaled_action
+            action = buffer_action
         return action, buffer_action
     
-    def llm_action(self,env):
-        action = env.env_method("prompt_llm")
+    
+    def expert_explore(self,env):
+        action = env.env_method("get_expert_demonstration")
         action = np.array(action)
         print("*******************llm action",action)
-        return action,action
+        return action
     
 class GuideSAC(SAC):
     def __init__(self,
