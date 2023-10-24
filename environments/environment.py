@@ -9,7 +9,6 @@ import pybullet_data
 import numpy as np
 import os
 import time
-from scipy.interpolate import interp2d
 import cv2
 # import gym
 import gymnasium as gym

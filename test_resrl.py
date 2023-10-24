@@ -90,7 +90,7 @@ elif policy_name == "llmsac_imgres":
   model.learn(total_timesteps=80000,callback=checkpoint_callback,tb_log_name= name)
 elif policy_name == "llmsac_imgdrop":
   
-  policy_name = "llmsac_imgdrop"
+  policy_name = "llmsac_imgdrop_withnoise"
   ep = (0.15,"fixed")
   name = policy_name + str(100*ep[0])+ep[1]+task_name+"_model"
   checkpoint_callback = CheckpointCallback(
@@ -104,7 +104,7 @@ elif policy_name == "llmsac_imgdrop":
   env = ResPickOrPlaceEnvWithoutLangReward(
     image_obs=True,
     residual=residual,
-    # observation_noise=5,
+    observation_noise=5,
     render=True,
     multi_discrete=False,
     scale_action=True,
