@@ -13,6 +13,9 @@ from scipy.interpolate import interp2d
 import cv2
 # import gym
 import gymnasium as gym
+PIXEL_SIZE = 0.00267857
+BOUNDS = np.float32([[-0.3, 0.3], [-0.8, -0.2], [0, 0.15]])  # X Y Z
+
 class PickPlaceEnv(gym.Env):
   def __init__(self,task = None,render=False,ee = "gripper"):
     self.dt = 1/480 * 2
@@ -87,12 +90,20 @@ class PickPlaceEnv(gym.Env):
     if self.task is not None:
       self.task.reset(self)
     if self.ee_type == "suction":
-      obj_ids = self.obj_name_to_id.values()
+      obj_ids = []
+      for key in self.obj_name_to_id.keys():
+        if key in self.task.config['pick']:
+          obj_ids.append(self.obj_name_to_id[key])
+      print("obj_ids",obj_ids)  
       self.gripper.set_objid(obj_ids)
 
     # arm init position
     pybullet.configureDebugVisualizer(pybullet.COV_ENABLE_RENDERING, 1)
-    place_xyz = np.float32([0, -0.2, 0.4])
+    pybullet.resetDebugVisualizerCamera(cameraDistance=1,
+                                    cameraYaw=0,
+                                    cameraPitch=-75,
+                                    cameraTargetPosition=[0, -0.5, 0])
+    place_xyz = np.float32([0, -0.2, 0.25])
     ee_xyz = np.float32(pybullet.getLinkState(self.robot_id, self.tip_link_id)[0])
 
     while np.linalg.norm(place_xyz - ee_xyz) > 0.01:
@@ -105,6 +116,7 @@ class PickPlaceEnv(gym.Env):
     
 
     # Get observation.
+    self.pos_list = None
     obs = self.get_observation()
     self.reset_reward(obs)
     # self.obj_pos = self.get_object_position()
@@ -278,7 +290,7 @@ class PickPlaceEnv(gym.Env):
   def get_reward(self,obs,action):
     raise NotImplementedError
 
-  def get_depth(self, bounds, pixel_size):
+  def get_depth(self, bounds = BOUNDS, pixel_size = PIXEL_SIZE):
     # start_time = time.time()
     color, depth, position, orientation, intrinsics = self.render_image()
     # # Get heightmaps and colormaps.
@@ -579,5 +591,3 @@ PLACE_TARGETS = {
   "bottom right corner": (0.3 - 0.05,  -0.8 + 0.05, 0),
 }
 
-PIXEL_SIZE = 0.00267857
-BOUNDS = np.float32([[-0.3, 0.3], [-0.8, -0.2], [0, 0.15]])  # X Y Z

@@ -53,12 +53,12 @@ class PutBlockInBowl():
     def p_neglect(self,pix,obj_name_to_id,pos_list):
         for key in obj_name_to_id.keys():
             if key in self.config["pick"] : 
-                max_dis = 15
-            _pos_pix = pos_list[2*self.category_names.index(key):2*self.category_names.index(key)+2]
-            print("distance with ", key,": ",np.linalg.norm(_pos_pix-pix),_pos_pix,pix)
-            if np.linalg.norm(_pos_pix-pix) < max_dis:
-                STEP_SIM = True
-                return STEP_SIM
+                max_dis = 12
+                _pos_pix = pos_list[2*self.category_names.index(key):2*self.category_names.index(key)+2]
+                # print("distance with ", key,": ",np.linalg.norm(_pos_pix-pix),_pos_pix,pix)
+                if np.linalg.norm(_pos_pix-pix) < max_dis:
+                    STEP_SIM = True
+                    return STEP_SIM
         return False
         
     def plan_scene(self):
@@ -113,6 +113,7 @@ class PutBlockInBowl():
     def exploration_action(self,env):
         print("get_expert_demonstration")
         # print(self.observation)
+        obs = env.observation
         object_in_hand = env.last_pick_success
         obj_pos = env.pos_list
         goals = self.goals
@@ -137,7 +138,7 @@ class PutBlockInBowl():
                 res = np.random.randint(0,env.image_size[0]/4,(2,))
 
             if env.one_hot_action:
-                one_hot_idx = [1 if i== place_obj else 0  for i in range(obj_num)]
+                one_hot_idx = [1 if i== place_obj else 0  for i in range(obj_num+1)]
                 idx = one_hot_idx
             else:
                 idx = [place_obj]
@@ -150,7 +151,7 @@ class PutBlockInBowl():
         else:
             picked_obj = goals[0]
             if env.one_hot_action:
-                one_hot_idx = [1 if i== picked_obj else 0  for i in range(obj_num)]
+                one_hot_idx = [1 if i== picked_obj else 0  for i in range(obj_num+1)]
                 idx = one_hot_idx
             else:
                 idx = [picked_obj]
@@ -179,12 +180,10 @@ class PutBlockInBowl():
             desired_position = xyz_to_pix(desired_position,BOUNDS,PIXEL_SIZE)
             desired_action = [desired_primitive]+desired_position[:2]
         y = env.last_pick_success
-        print("desired_action :",desired_action)
         cross_ent = y*np.log(action[0]+0.001)+(1-y)*np.log(1-action[0]+0.001)
         phase_loss = -cross_ent*phase_penalty
         phase_loss = np.clip(phase_loss,0, phase_penalty)
         reward -= phase_loss
-        print("phase_loss",phase_loss)
         dis_loss = 0
         if (action[0] < 0.5) and ( not env.last_pick_success):
             dis = np.linalg.norm(action[1:]-desired_action[1:])
@@ -197,7 +196,7 @@ class PutBlockInBowl():
             thre = 100
             dis_loss = - (dis/thre,1)[dis>thre]**2*0.25
             reward += dis_loss  
-        print("dis_reward",dis_loss)        
+        print("desired_action :",desired_action,"phase_loss",phase_loss,"dis_reward",dis_loss)        
         done = (env.step_count >= env.max_steps)
         _reward,_done = self.get_reward(env)
         if _done:
@@ -249,7 +248,7 @@ class PickBlock():
             if key in self.config["pick"] : 
                 max_dis = 15
             _pos_pix = pos_list[2*self.category_names.index(key):2*self.category_names.index(key)+2]
-            print("distance with ", key,": ",np.linalg.norm(_pos_pix-pix),_pos_pix,pix)
+            # print("distance with ", key,": ",np.linalg.norm(_pos_pix-pix),_pos_pix,pix)
             if np.linalg.norm(_pos_pix-pix) < max_dis:
                 STEP_SIM = True
                 return STEP_SIM

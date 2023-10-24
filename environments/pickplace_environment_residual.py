@@ -18,7 +18,9 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
 
     def __init__(self, 
                 task= PutBlockInBowl,
+                residual = True,
                 image_obs = False,
+                observation_noise = 0,
                 languange_expert = False,
                 multi_discrete = False,
                 scale_obs = True,
@@ -28,10 +30,12 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
                 render=False,
                 one_hot_action = False):
         super().__init__(task,render=render,ee=ee)
+        self.residual = residual
         image_size = (224,224)
         self.image_size = image_size
         self.reshape_para = 0.25
         self.height_coef = 20
+        self.observation_noise = observation_noise
 
         self.image_obs = image_obs
         self.neglect_steps = neglect_steps
@@ -41,6 +45,8 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
         obj_num = len(self.task.category_names)
         goal_num = self.task.goal_num
         self.one_hot_action = one_hot_action
+        if self.residual:
+                obj_num += 1
         if image_obs:
             # self.observation_space = spaces.Dict({
             #     "image": spaces.Box(0, 1, image_size + (4,), dtype=np.float32),
@@ -50,6 +56,7 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
             #     "lang_recommendation": spaces.Box(low=np.array([0, 0, 0]),high=np.array([1, 1, 1]),dtype=np.float32),
             # })
             image_size = (int(image_size[0]*self.reshape_para),int(image_size[1]*self.reshape_para))
+            
             self.observation_space = spaces.Dict({
                     "rgbd": spaces.Box(0, 1, image_size + (4,), dtype=np.float32),
                     "image": spaces.Box(0, 1, (obj_num*2,), dtype=np.float32),
@@ -71,16 +78,27 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
                 })
 
         if not multi_discrete:
-            if self.one_hot_action:
-                low = np.zeros((1+obj_num+2,))
-                high = np.ones((1+obj_num+2,))
-                if not scale_action:
-                    high[-2] = self.image_size[0]
-                    high[-1] = self.image_size[1]
-                self.action_space = spaces.Box(low=low,high=high,dtype=np.float32)
+            # shit not positive
+            # solution? add a object in the center? change action space to -1,1
+            if self.residual:
+                if self.one_hot_action:
+                    low = - np.ones((1+obj_num+2,))
+                    low[0:-2] = 0*low[0:-2]
+                    high = np.ones((1+obj_num+2,))
+                    if not scale_action:
+                        high[-2] = self.image_size[0]
+                        high[-1] = self.image_size[1]
+                    self.action_space = spaces.Box(low=low,high=high,dtype=np.float32)
+                else:
+                    low = - np.ones((4,))# motion primitive/object index/position
+                    high = np.ones((4,))
+                    if not scale_action:
+                        high[-2] = self.image_size[0]
+                        high[-1] = self.image_size[1]
+                    self.action_space = spaces.Box(low=low,high=high,dtype=np.float32)
             else:
-                low = np.zeros((4,))# motion primitive/object index/position
-                high = np.ones((4,))
+                low = np.zeros((3,))
+                high = np.ones((3,))
                 if not scale_action:
                     high[-2] = self.image_size[0]
                     high[-1] = self.image_size[1]
@@ -113,23 +131,29 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
             action = action.squeeze(0)
         
         primitive = action[0]
-        if self.one_hot_action:
-            one_hot_idx = action[1:1+len(self.task.category_names)]
-            obj_index = np.argmax(one_hot_idx)
-            obj_pos = observation["image"][2*obj_index:2*obj_index+2]
+        if self.residual:
+            if self.one_hot_action:
+                one_hot_idx = action[1:-2]
+                obj_index = np.argmax(one_hot_idx)
+                obj_pos = observation["image"][2*obj_index:2*obj_index+2]
+            else:
+                obj_index = action[1]
+                obj_pos = observation["image"][2*obj_index:2*obj_index+2]
+            if self.scale_action:
+                residual = action[-2:]*self.image_size[0]/2
+            else:
+                residual = action[-2:]
+            if self.scale_obs:
+                obj_pos = obj_pos*self.image_size[0]
+            pix = residual+obj_pos
+            pix = np.clip(pix,[0,0],[self.image_size[0]-1,self.image_size[1]-1])
+            action = np.array([primitive]+pix.tolist())
         else:
-            obj_index = action[1]
-            obj_pos = observation["image"][2*obj_index:2*obj_index+2]
-        if self.scale_action:
-            residual = action[-2:]*self.image_size[0]
-        else:
-            residual = action[-2:]
-        if self.scale_obs:
-            obj_pos = obj_pos*self.image_size[0]
-        pix = residual+obj_pos
-        pix = np.clip(pix,[0,0],[self.image_size[0]-1,self.image_size[1]-1])
-        action = np.array([primitive]+pix.tolist())
-
+            pix = action[1:]
+            if self.scale_action:
+                pix = pix*self.image_size[0]
+                pix = np.clip(pix,[0,0],[self.image_size[0]-1,self.image_size[1]-1])
+            action = np.array([primitive]+pix.tolist())
         return action
 
 
@@ -141,7 +165,6 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
         height = self.depth
         raw_action = action.copy()
         action = self.translate_action(raw_action,self.observation)
-
         STEP_SIM = False
         if self.last_pick_success:
             STEP_SIM = True
@@ -176,7 +199,7 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
         self.step_count += 1
         print("action ",raw_action,"real action",action)
         print("reward",reward)
-        print("###############time:",time.time()-start_time,"obs time:",time.time()-obs_start_time)
+        # print("###############time:",time.time()-start_time,"obs time:",time.time()-obs_start_time)
         print("observation:",observation["image"], observation["object_in_hand"])
         info = self.get_info()
         return observation, reward, done,False, info
@@ -185,7 +208,7 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
         ee_xyz = np.float32(pybullet.getLinkState(self.robot_id, self.tip_link_id)[0])
         max_time = 3
         pix = action[1:].copy()
-        if action[0] < 0.5:
+        if action[0] <= 0.5:
             #pick
             self.gripper.release()
             pick_pix = pix
@@ -315,16 +338,46 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
         lang_goal = self.task.goals
         obs['lang_goal'] = lang_goal
         self.obj_pos = self.get_object_position()
-        pos_list = []
-        if len(self.task.category_names) < len(self.task.config['pick'])+len(self.task.config['place']):
-            for key in self.task.config['pick']:
-                pos_list += xyz_to_pix(self.obj_pos[key],BOUNDS,PIXEL_SIZE)
-        else:
-            for key in self.task.config['pick']:
-                pos_list += xyz_to_pix(self.obj_pos[key],BOUNDS,PIXEL_SIZE)
-            for key in self.task.config['place']:
-                pos_list += xyz_to_pix(self.obj_pos[key],BOUNDS,PIXEL_SIZE)
 
+        if len(self.task.category_names) < len(self.task.config['pick'])+len(self.task.config['place']):
+                keys = self.task.config['pick']
+        else:
+            keys = self.task.config['pick']+self.task.config['place']
+        # print("hasattr",hasattr(self,'pos_list'))
+        if self.pos_list is not None:
+            
+            last_pos = self.pos_list
+            # print("last_pos",type(last_pos))
+            pos_list = last_pos[:]
+            
+            for idx,key in enumerate(keys):
+                # update position observation only if the object is moved
+                _pos = xyz_to_pix(self.obj_pos[key],BOUNDS,PIXEL_SIZE)
+                previous_pos = last_pos[2*idx:2*idx+2]
+                if np.linalg.norm(np.array(_pos) - np.array(previous_pos)) > 5:
+                    # uodate position
+                    # print("update position","from",previous_pos,"to",_pos)
+                    noise = np.random.normal(0, self.observation_noise/2, 2)
+                    # print("noise",noise)
+                    _pos = [int(_pos[0]+noise[0]),int(_pos[1]+noise[1])] 
+                    pos_list[2*idx:2*idx+2] = _pos
+        else:
+            pos_list = []
+            for idx,key in enumerate(keys):
+                # update position observation only if the object is moved
+                _pos = xyz_to_pix(self.obj_pos[key],BOUNDS,PIXEL_SIZE)
+                noise = np.random.normal(0, self.observation_noise/2, 2)
+                if np.linalg.norm(noise) > 5:
+                    noise = noise/np.linalg.norm(noise)*4.8
+
+                # print("noise",noise)
+                _pos = [int(_pos[0]+noise[0]),int(_pos[1]+noise[1])]
+                pos_list += _pos
+            
+            if self.residual:
+                pos_list += [0.5*self.image_size[0],0.5*self.image_size[1]] 
+            
+ 
         self.pos_list = pos_list
         self.depth = self.get_depth(BOUNDS,PIXEL_SIZE)
         if self.image_obs:
@@ -348,6 +401,21 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
         return 0,False
     def get_expert_demonstration(self):
         desired_action = self.task.exploration_action(self)
+        if not self.residual:
+            pri = desired_action[0]
+            idx = desired_action[1:-2]
+            res = desired_action[-2:]
+            if self.one_hot_action:
+                idx = np.argmax(idx)
+            else:
+                idx = idx[0]
+            pos = self.observation["image"][2*idx:2*idx+2]
+            pos = pos * self.image_size[0] if self.scale_obs else pos
+            res = res * self.image_size[0] if self.scale_action else res
+            pix = (pos + res)/self.image_size if self.scale_action else pos + res
+            desired_action = np.array([pri] + pix.tolist())
+            # print("desired_action",desired_action)
+
         return desired_action
     
 def out_of_bound(pos,BOUNDS):

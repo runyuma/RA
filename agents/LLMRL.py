@@ -4,6 +4,7 @@ from typing import Any, ClassVar, Dict, List, Optional, Tuple, Type, TypeVar, Un
 import torch as th
 from gymnasium import spaces
 import numpy as np
+import copy
 
 from stable_baselines3.common.buffers import ReplayBuffer
 from stable_baselines3.common.noise import ActionNoise
@@ -28,7 +29,9 @@ class LLMSAC(SAC):
         buffer_size: int = 1_000_000,  # 1e6
         learning_starts: int = 100,
         batch_size: int = 256,
-        epsilon_llm: float = 0.0,
+        epsilon_llm:Tuple[float,str] = (0.0, "fixed"), #auto
+        dropout_position: float= 0,
+        residual_rl: bool = False,
         tau: float = 0.005,
         gamma: float = 0.99,
         train_freq: Union[int, Tuple[int, str]] = 1,
@@ -52,7 +55,8 @@ class LLMSAC(SAC):
         _init_setup_model: bool = True,
     ):
         self.epsilon_llm = epsilon_llm
-
+        self.dropout_position = dropout_position
+        self.residual_rl = residual_rl
         super().__init__(
             policy,
             env,
@@ -92,8 +96,15 @@ class LLMSAC(SAC):
             # Warmup phase
             unscaled_action = np.array([self.action_space.sample() for _ in range(n_envs)])
         else:
-            if self.epsilon_llm > 0:
-                if np.random.rand() < self.epsilon_llm:
+            prompt_prob = self.epsilon_llm[0]
+            if self.epsilon_llm[1] == "auto":
+                with th.no_grad():
+                    ent_coef = th.exp(self.log_ent_coef.detach()).tolist()[0]
+                    # ent_coef = 
+                print("*******************ent_coef",ent_coef)
+                prompt_prob = prompt_prob * ent_coef
+            if prompt_prob > 0:
+                if np.random.rand() < prompt_prob:
                     # print("*******************USE_EXPERT")
                     USE_EXPERT = True
                 else:
@@ -127,6 +138,153 @@ class LLMSAC(SAC):
         action = np.array(action)
         print("*******************llm action",action)
         return action
+    def train(self, gradient_steps: int, batch_size: int = 64) -> None:
+        # Switch to train mode (this affects batch norm / dropout)
+        self.policy.set_training_mode(True)
+        # Update optimizers learning rate
+        optimizers = [self.actor.optimizer, self.critic.optimizer]
+        if self.ent_coef_optimizer is not None:
+            optimizers += [self.ent_coef_optimizer]
+
+        # Update learning rate according to lr schedule
+        self._update_learning_rate(optimizers)
+
+        ent_coef_losses, ent_coefs = [], []
+        actor_losses, critic_losses = [], []
+
+        for gradient_step in range(gradient_steps):
+            # Sample replay buffer
+            replay_data = self.replay_buffer.sample(batch_size, env=self._vec_normalize_env)  # type: ignore[union-attr]
+            # import time
+            # start = time.time()
+            if self.dropout_position > 0:
+                with th.no_grad():
+                    replay_data = copy.deepcopy(replay_data)
+                    # print("*******************replay_data",replay_data.observations['image'])
+                    # print(replay_data.observations['image'].shape)
+                    ## ramdomly mask the position for replay buffer
+                    shape = replay_data.observations['image'].shape
+                    prob = (1-self.dropout_position)*th.ones(shape[0],shape[1]//2)
+                    mask_half = th.bernoulli(prob)
+                    if self.residual_rl:
+                        dropout_action = replay_data.actions[:,1:-2]
+                        mask_half[:,-1] = th.ones(shape[0])
+                        for i in range(shape[0]):
+                            action = dropout_action[i].argmax()
+                            # the center block is masked
+                            if mask_half[i,action] == 0:
+                                _action = copy.deepcopy(replay_data.actions[i])
+                                _action[1:-2-1] = -1
+                                _action[-3] = 1
+                                _action[-2:] =  replay_data.observations['image'][i][action*2:action*2+2]+_action[-2:] - th.tensor([1,1]).to(self.device)
+                                replay_data.actions[i] = _action
+                                # print("***_action",_action)
+                                # print(replay_data.observations['image'][i])
+                                # print(replay_data.actions[i])
+
+                    mask = th.repeat_interleave(mask_half,2,dim=1).to(self.device)
+                    dropout_obs = replay_data.observations['image']*mask
+                    dropout_obs_next = replay_data.next_observations['image']*mask
+
+                        # transfer the action to the absolute position
+                        # observation_gap = replay_data.observations['image'] - dropout_obs
+                    #     # observation [0 1] action space[-1,1]
+                    #     a = observation_gap[:,0::2]
+                    #     b = observation_gap[:,1::2]
+                    #     x = a[th.arange(a.size(0)),replay_data.actions[:,1:-2].argmax(dim=1)]
+                    #     y = b[th.arange(b.size(0)),replay_data.actions[:,1:-2].argmax(dim=1)]
+                    #     xy = th.stack((x,y),dim=1)
+                    #     replay_data.actions[:,-2:] += xy
+                    #     # print(xy.shape)
+                    #     # print(xy)
+                    #     # print(replay_data.actions)
+                    replay_data.observations['image'] = dropout_obs
+                    replay_data.next_observations['image'] = dropout_obs_next
+                    # print("time prepo:",time.time()-start)
+
+            # print(mask)
+            # print("*******************replay_data",replay_data.observations['image'])
+
+
+
+            ## drop out for the position
+
+            # Action by the current actor for the sampled state
+            actions_pi, log_prob = self.actor.action_log_prob(replay_data.observations)
+            log_prob = log_prob.reshape(-1, 1)
+
+            ent_coef_loss = None
+            if self.ent_coef_optimizer is not None and self.log_ent_coef is not None:
+                # Important: detach the variable from the graph
+                # so we don't change it with other losses
+                # see https://github.com/rail-berkeley/softlearning/issues/60
+                ent_coef = th.exp(self.log_ent_coef.detach())
+                ent_coef_loss = -(self.log_ent_coef * (log_prob + self.target_entropy).detach()).mean()
+                ent_coef_losses.append(ent_coef_loss.item())
+            else:
+                ent_coef = self.ent_coef_tensor
+
+            ent_coefs.append(ent_coef.item())
+
+            # Optimize entropy coefficient, also called
+            # entropy temperature or alpha in the paper
+            if ent_coef_loss is not None and self.ent_coef_optimizer is not None:
+                self.ent_coef_optimizer.zero_grad()
+                ent_coef_loss.backward()
+                self.ent_coef_optimizer.step()
+
+            with th.no_grad():
+                # Select action according to policy
+                next_actions, next_log_prob = self.actor.action_log_prob(replay_data.next_observations)
+                # Compute the next Q values: min over all critics targets
+                next_q_values = th.cat(self.critic_target(replay_data.next_observations, next_actions), dim=1)
+                next_q_values, _ = th.min(next_q_values, dim=1, keepdim=True)
+                # add entropy term
+                next_q_values = next_q_values - ent_coef * next_log_prob.reshape(-1, 1)
+                # td error + entropy term
+                target_q_values = replay_data.rewards + (1 - replay_data.dones) * self.gamma * next_q_values
+
+            # Get current Q-values estimates for each critic network
+            # using action from the replay buffer
+            current_q_values = self.critic(replay_data.observations, replay_data.actions)
+
+            # Compute critic loss
+            critic_loss = 0.5 * sum(F.mse_loss(current_q, target_q_values) for current_q in current_q_values)
+            assert isinstance(critic_loss, th.Tensor)  # for type checker
+            critic_losses.append(critic_loss.item())  # type: ignore[union-attr]
+
+            # Optimize the critic
+            self.critic.optimizer.zero_grad()
+            critic_loss.backward()
+            self.critic.optimizer.step()
+
+            # Compute actor loss
+            # Alternative: actor_loss = th.mean(log_prob - qf1_pi)
+            # Min over all critic networks
+            q_values_pi = th.cat(self.critic(replay_data.observations, actions_pi), dim=1)
+            min_qf_pi, _ = th.min(q_values_pi, dim=1, keepdim=True)
+            actor_loss = (ent_coef * log_prob - min_qf_pi).mean()
+            actor_losses.append(actor_loss.item())
+
+            # Optimize the actor
+            self.actor.optimizer.zero_grad()
+            actor_loss.backward()
+            self.actor.optimizer.step()
+
+            # Update target networks
+            if gradient_step % self.target_update_interval == 0:
+                polyak_update(self.critic.parameters(), self.critic_target.parameters(), self.tau)
+                # Copy running stats, see GH issue #996
+                polyak_update(self.batch_norm_stats, self.batch_norm_stats_target, 1.0)
+
+        self._n_updates += gradient_steps
+
+        self.logger.record("train/n_updates", self._n_updates, exclude="tensorboard")
+        self.logger.record("train/ent_coef", np.mean(ent_coefs))
+        self.logger.record("train/actor_loss", np.mean(actor_losses))
+        self.logger.record("train/critic_loss", np.mean(critic_losses))
+        if len(ent_coef_losses) > 0:
+            self.logger.record("train/ent_coef_loss", np.mean(ent_coef_losses))
     
 class GuideSAC(SAC):
     def __init__(self,
