@@ -199,7 +199,7 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
         self.step_count += 1
         print("action ",raw_action,"real action",action)
         print("reward",reward)
-        # print("###############time:",time.time()-start_time,"obs time:",time.time()-obs_start_time)
+        print("###############time:",time.time()-start_time,"obs time:",time.time()-obs_start_time)
         print("observation:",observation["image"], observation["object_in_hand"])
         info = self.get_info()
         return observation, reward, done,False, info

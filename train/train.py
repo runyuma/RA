@@ -25,12 +25,34 @@ save_vecnormalize=True,
 )
 residual = True
 env = ResPickOrPlaceEnvWithoutLangReward(
-image_obs=True,
-residual=residual,
-observation_noise=5,
-render=False,
-multi_discrete=False,
-scale_action=True,
-ee ="suction",
-scale_obs=True,
-one_hot_action = True)
+    image_obs=True,
+    residual=residual,
+    observation_noise=5,
+    render=False,
+    multi_discrete=False,
+    scale_action=True,
+    ee ="suction",
+    scale_obs=True,
+    one_hot_action = True)
+policy_kwargs = dict(
+    features_extractor_class=FeatureExtractor,
+    features_extractor_kwargs=dict(features_dim=32),
+  )
+print(env.observation_space)
+print(env.action_space)
+
+model= LLMSAC(
+    "MultiInputPolicy",
+    env,
+    policy_kwargs=policy_kwargs,
+    # learning_starts=0,
+    learning_rate=3e-4,
+    buffer_size= 80000,
+    gamma=0.9,
+    epsilon_llm=ep,
+    dropout_position=0.2,
+    residual_rl= residual,
+    tensorboard_log="tmp/pickplace_tb/",
+)
+
+model.learn(total_timesteps=80000,callback=checkpoint_callback,tb_log_name= name)
