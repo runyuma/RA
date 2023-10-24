@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 from stable_baselines3 import SAC,PPO,TD3,DDPG,A2C,ppo
 from stable_baselines3.common.callbacks import CheckpointCallback
 policy_name = "llmsac_imgdrop_withnoise"
+task_name = "putblockbowl"
 ep = (0.15,"fixed")
 name = policy_name + str(100*ep[0])+ep[1]+task_name+"_model"
 checkpoint_callback = CheckpointCallback(
