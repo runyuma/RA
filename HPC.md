@@ -19,3 +19,7 @@ ssh login1.hpc.tudelft.nl
 module use /opt/insy/modulefiles
 module load miniconda/3.9
 ```
+### interactive session
+```bash
+sinteractive --cpus-per-task=2 --mem=5000mb ###Request for resource.
+```
