@@ -467,19 +467,22 @@ def extract_sub_image_with_padding(image, x, y, h, w):
 
     
     # Calculate the overlapping region between the sub-image and the input image
-    overlap_top_y = max(top_left_y, 0)
-    overlap_top_x = max(top_left_x, 0)
-    overlap_bottom_y = min(bottom_right_y, image.shape[0])
-    overlap_bottom_x = min(bottom_right_x, image.shape[1])
+    overlap_top_y = min(max(top_left_y, 0), image.shape[0])
+    overlap_top_x = min(max(top_left_x, 0), image.shape[1])
+    overlap_bottom_y = max(min(bottom_right_y, image.shape[0]),0)
+    overlap_bottom_x = max(min(bottom_right_x, image.shape[1]),0)
     
     # Calculate where to place the overlapping region in the output image
     start_y = overlap_top_y - top_left_y
     start_x = overlap_top_x - top_left_x
 
-    # print("overlap_top_x",overlap_bottom_y - overlap_top_y)
-    # print("overlap_top_y",overlap_bottom_x - overlap_top_x)
+
+    print("start_x",start_x,"start_y",start_y)
+    print("overlap_top_x",overlap_top_x,"overlap_top_y",overlap_top_y)
+    print("overlap_bottom_x",overlap_bottom_x,"overlap_bottom_y",overlap_bottom_y)
     output_image[start_x:start_x + (overlap_bottom_x - overlap_top_x),
                  start_y:start_y + (overlap_bottom_y - overlap_top_y),] = image[overlap_top_x:overlap_bottom_x,overlap_top_y:overlap_bottom_y]
+    
     
     return output_image
 

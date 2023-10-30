@@ -107,12 +107,13 @@ class AttentionFeatureExtractor(BaseFeaturesExtractor):
             nn.Linear(extract_size, extract_size),
             nn.ReLU())
         self.token_size = extract_size+2+observation_space['object_in_hand'].shape[0]+observation_space['lang_goal'].shape[0]+1
+        self.obj_num = observation_space['rgbd'].shape[0]
         self.atten = AttentionLayer(self.token_size, 1)
         self.fc2 = nn.Sequential(
-            nn.Linear(self.token_size, self.token_size),
+            nn.Linear(self.token_size*self.obj_num, self.token_size*self.obj_num),
             nn.ReLU())
         self.fc3 = nn.Sequential(
-            nn.Linear(self.token_size, features_dim),
+            nn.Linear(self.token_size*self.obj_num, features_dim),
             nn.ReLU())
 
         
@@ -143,7 +144,7 @@ class AttentionFeatureExtractor(BaseFeaturesExtractor):
 
         obj_inhand = obj_inhand.unsqueeze(1).repeat_interleave(N, dim=1)
         lang_goal = lang_goal.unsqueeze(1).repeat_interleave(N, dim=1)
-        position = torch.arange(N).unsqueeze(0).repeat_interleave(B, dim=0).unsqueeze(2)
+        position = torch.arange(N).unsqueeze(0).repeat_interleave(B, dim=0).unsqueeze(2).to(obj_inhand.device)
         out = torch.cat((out,obj_inhand,lang_goal,position),dim=2)
         out = self.atten(out,out,out)
         out = out.reshape(B,-1)

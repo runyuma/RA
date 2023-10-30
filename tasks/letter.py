@@ -159,7 +159,16 @@ class PutLetterOontheBowl(Task):
 
         print("desired_action",desired_action)
         return np.array(desired_action) 
-        
+    def p_neglect(self,pix,obj_name_to_id,pos_list):
+        for key in obj_name_to_id.keys():
+            if key in self.config["pick"] : 
+                max_dis = 25
+                _pos_pix = pos_list[2*self.category_names.index(key):2*self.category_names.index(key)+2]
+                # print("distance with ", key,": ",np.linalg.norm(_pos_pix-pix),_pos_pix,pix)
+                if np.linalg.norm(_pos_pix-pix) < max_dis:
+                    STEP_SIM = True
+                    return STEP_SIM
+        return False   
     def reward(self,observation,action,env,BOUNDS,PIXEL_SIZE,xyz_to_pix):
         phase_penalty = 0.25
         done = False
