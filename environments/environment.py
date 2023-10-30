@@ -10,7 +10,6 @@ import numpy as np
 import os
 import time
 import cv2
-# import gym
 import gymnasium as gym
 PIXEL_SIZE = 0.00267857
 BOUNDS = np.float32([[-0.3, 0.3], [-0.8, -0.2], [0, 0.15]])  # X Y Z

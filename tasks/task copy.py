@@ -1,103 +1,38 @@
 import numpy as np
-from environments.environment import BOUNDS,PIXEL_SIZE,COLORS
+import random
 import pybullet
-class Task():
-    def __init__(self,
-                 config, # pick&place objects
-                 lang_template,
-                 goal_num, # number of goals
-                 colors = COLORS,
-                 bounds = BOUNDS,
-                 dis_eps = 0.15,
-                 ):
+class PutBlockInBowl():
+    """Put Blocks in Bowl base class and task."""
+
+    def __init__(self,colors,bounds):
+        super().__init__()
+        self.max_steps = 10
+        self.pos_eps = 0.05
+        self.lang_template = "put the {pick} in a {place}"
         self.colors = colors
         self.bounds = bounds
-        self.config = config
-        self.category_names = []
-        for i in range(len(self.config["pick"])):
-            self.category_names.append(self.config["pick"][i])
-        for i in range(len(self.config["place"])):    
-            if self.config["place"][i] not in self.category_names:
-                self.category_names.append(self.config["place"][i])
-        self.lang_template = lang_template
-        self.goal_num = goal_num
-        self.max_steps = 10
-        self.dis_eps = dis_eps
-        self.pos_eps = 0.05
-    
+        self.category_names = ['yellow block', 'green block', 'blue block', 'yellow bowl', 'green bowl', 'blue bowl',]
+        self.goal_num = 2
+                            #    "blue block in green bowl",
+                            #    "green block in blue bowl", 
+                            #    "yellow block in blue bowl", 
+                            #    "blue block in yellow bowl",
+                            #    "yellow block in green bowl",
+                            #    "green block in yellow bowl"]
+
     def reset(self,env):
         # Load objects according to config.
+        self.config =  {'pick':  ['yellow block', 'green block', 'blue block'],
+          'place': ['yellow bowl', 'green bowl', 'blue bowl']}
         timeout = True
+        obj_name_to_id = {}
         obj_names = list(self.config["pick"]) + list(self.config["place"])
         while timeout:
             print("init scene")
             pos,goals,timeout = self.plan_scene()
-
+        
         self.goals = goals
-        self.set_env(env,goals,obj_names,pos)
-        
-
-    def plan_scene(self):
-        time = 0
-        obj_names = list(self.config["pick"]) + list(self.config["place"])
-        obj_xyz = np.zeros((0, 3))
-        pos = []
-        for obj_name in obj_names:               
-            # Get random position 15cm+ from other objects.
-            while True:
-                time += 1
-                if time > 100:
-                    timeout = True
-                    return None,None,timeout
-                rand_x = np.random.uniform(self.bounds[0, 0] + 0.1, self.bounds[0, 1] - 0.1)
-                rand_y = np.random.uniform(self.bounds[1, 0] + 0.1, self.bounds[1, 1] - 0.1)
-                rand_xyz = np.float32([rand_x, rand_y, 0.03]).reshape(1, 3)
-                if len(obj_xyz) == 0:
-                    obj_xyz = np.concatenate((obj_xyz, rand_xyz), axis=0)
-                    break
-                else:
-                    nn_dist = np.min(np.linalg.norm(obj_xyz - rand_xyz, axis=1)).squeeze()
-                    if nn_dist > self.dis_eps:
-                        obj_xyz = np.concatenate((obj_xyz, rand_xyz), axis=0)
-                        break
-            pos.append(rand_xyz)
-                
-        # determine pick&place goal
-        goals = self.sample_goals()
-        
-        timeout = False
-        return pos,goals,timeout
-    
-    def set_env(self,env,goals,obj_names,pos):
-        raise NotImplementedError
-
-    def sample_goals(self):
-        raise NotImplementedError
-
-    def p_neglect(self,pix,obj_name_to_id,pos_list):
-        for key in obj_name_to_id.keys():
-            if key in self.config["pick"] : 
-                max_dis = 12
-                _pos_pix = pos_list[2*self.category_names.index(key):2*self.category_names.index(key)+2]
-                # print("distance with ", key,": ",np.linalg.norm(_pos_pix-pix),_pos_pix,pix)
-                if np.linalg.norm(_pos_pix-pix) < max_dis:
-                    STEP_SIM = True
-                    return STEP_SIM
-        return False
-class PutBlockInBowl(Task):
-    """Put Blocks in Bowl base class and task."""
-
-    def __init__(self,colors,bounds):
-        super().__init__(
-            config = {'pick':  ['yellow block', 'green block', 'blue block'],'place': ['yellow bowl', 'green bowl', 'blue bowl']},
-            lang_template = "put the {pick} on a {place}",
-            goal_num = 2,
-            colors = colors,
-            bounds = bounds,
-        )
-    def set_env(self,env,goals,obj_names,pos):
         pick_idx,place_idx = goals
-        obj_name_to_id = {}
         env.lang_goal = self.lang_template.format(pick=self.config["pick"][pick_idx], place=self.config["place"][place_idx])
         for obj_name in obj_names:
             object_color = self.colors[obj_name.split(" ")[0]]
@@ -114,16 +49,62 @@ class PutBlockInBowl(Task):
             pybullet.changeVisualShape(object_id, -1, rgbaColor=object_color)
             obj_name_to_id[obj_name] = object_id
         env.obj_name_to_id = obj_name_to_id
-    def sample_goals(self):
+
+    def p_neglect(self,pix,obj_name_to_id,pos_list):
+        for key in obj_name_to_id.keys():
+            if key in self.config["pick"] : 
+                max_dis = 12
+                _pos_pix = pos_list[2*self.category_names.index(key):2*self.category_names.index(key)+2]
+                # print("distance with ", key,": ",np.linalg.norm(_pos_pix-pix),_pos_pix,pix)
+                if np.linalg.norm(_pos_pix-pix) < max_dis:
+                    STEP_SIM = True
+                    return STEP_SIM
+        return False
+        
+    def plan_scene(self):
+        time = 0
+        self.config =  {'pick':  ['yellow block', 'green block', 'blue block'],
+          'place': ['yellow bowl', 'green bowl', 'blue bowl']}
+        obj_names = list(self.config["pick"]) + list(self.config["place"])
+        obj_xyz = np.zeros((0, 3))
+        pos = []
+        for obj_name in obj_names:
+            if ("block" in obj_name) or ("bowl" in obj_name):
+                # Get random position 15cm+ from other objects.
+                while True:
+                    time += 1
+                    if time > 100:
+                        timeout = True
+                        return None,None,timeout
+                    rand_x = np.random.uniform(self.bounds[0, 0] + 0.1, self.bounds[0, 1] - 0.1)
+                    rand_y = np.random.uniform(self.bounds[1, 0] + 0.1, self.bounds[1, 1] - 0.1)
+                    rand_xyz = np.float32([rand_x, rand_y, 0.03]).reshape(1, 3)
+                    if len(obj_xyz) == 0:
+                        obj_xyz = np.concatenate((obj_xyz, rand_xyz), axis=0)
+                        break
+                    else:
+                        nn_dist = np.min(np.linalg.norm(obj_xyz - rand_xyz, axis=1)).squeeze()
+                        if nn_dist > 0.15:
+                            obj_xyz = np.concatenate((obj_xyz, rand_xyz), axis=0)
+                            break
+                pos.append(rand_xyz)
+                
+        # determine pick&place goal 
         pick_idx =np.random.choice(len(self.config["pick"]))
         place_idx = np.random.choice(len(self.config["place"]))
         goals = [pick_idx,place_idx]
-        return goals
-        
+        # print("goals:",self.config["pick"][pick_idx])
+        timeout = False
+        return pos,goals,timeout
+        # env.lang_goal = "put all blocks in different corners" 
+
     def get_reward(self,env):
         pick_idx,place_idx = self.goals
         pick_pos = pybullet.getBasePositionAndOrientation(env.obj_name_to_id[self.config["pick"][pick_idx]])[0]
         place_pos = pybullet.getBasePositionAndOrientation(env.obj_name_to_id[self.config["place"][place_idx]])[0]
+        # print("pick_pos:",pick_pos,"place_pos:",place_pos)
+        # dis = np.linalg.norm(np.array(pick_pos)[:2] - np.array(place_pos)[:2])
+        # print("dis:",dis)
         if np.linalg.norm(np.array(pick_pos)[:2] - np.array(place_pos)[:2]) < self.pos_eps:
         
             return 1,True
@@ -225,8 +206,6 @@ class PutBlockInBowl(Task):
         reward += _reward
         done |= _done
         return reward,done
-
-
 class PickBlock():
     def __init__(self,colors,bounds):
         super().__init__()

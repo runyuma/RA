@@ -26,15 +26,14 @@ residual = True
 env = ResPickOrPlaceEnvWithoutLangReward(
 image_obs=True,
 residual=residual,
-# observation_noise=5,
+observation_noise=0,
 render=True,
 multi_discrete=False,
 scale_action=True,
-ee ="suction",
 scale_obs=True,
 one_hot_action = True)
 # print(env.observation_space)
-model =LLMSAC.load("tmp/llmsac_imgdrop15.0fixedputblockbowl_model/rl_model_80000_steps.zip")
+model =LLMSAC.load("tmp/llmsac_imgdrop_withnoise15.0fixedputblockbowl_model/rl_model_75000_steps.zip")
 
 # print("actor features extractor:",type(model.policy.actor.features_extractor))
 # print(model.policy.actor.features_extractor)

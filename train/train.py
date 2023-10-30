@@ -2,17 +2,18 @@ import os
 import sys
 # print(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from environments.pickplace_environment_residual import ResPickOrPlaceEnvWithoutLangReward,ResSimplifyPickOrPlaceEnvWithoutLangReward
+from environments.pickplace_environment_residual import ResPickOrPlaceEnvWithoutLangReward
 from tasks.task import PickBowl,PutBowlInBowl
-from agents.LLMRL import LLMSAC,GuideSAC
-from agents.PolicyNet import CustomCombinedExtractor,FeatureExtractor
+from agents.LLMRL import LLMSAC
+from agents.PolicyNet import CustomCombinedExtractor,FeatureExtractor,AttentionFeatureExtractor
 import numpy as np
 import matplotlib.pyplot as plt
-
+from tasks.letter import PutLetterOontheBowl
 
 from stable_baselines3 import SAC,PPO,TD3,DDPG,A2C,ppo
 from stable_baselines3.common.callbacks import CheckpointCallback
-policy_name = "llmsac_imgdrop_withnoise"
+
+policy_name = "llmsac_imgatten_withnoise"
 task_name = "putblockbowl"
 ep = (0.15,"fixed")
 name = policy_name + str(100*ep[0])+ep[1]+task_name+"_model"
@@ -23,19 +24,21 @@ name_prefix="rl_model",
 save_replay_buffer=False,
 save_vecnormalize=True,
 )
-residual = True
+
 env = ResPickOrPlaceEnvWithoutLangReward(
+    task= PutLetterOontheBowl,
     image_obs=True,
-    residual=residual,
+    residual=True,
     observation_noise=5,
-    render=False,
+    render=True,
     multi_discrete=False,
     scale_action=True,
-    ee ="suction",
+    ee="suction",
     scale_obs=True,
+    neglect_steps=False,
     one_hot_action = True)
 policy_kwargs = dict(
-    features_extractor_class=FeatureExtractor,
+    features_extractor_class=AttentionFeatureExtractor,
     features_extractor_kwargs=dict(features_dim=32),
   )
 print(env.observation_space)
@@ -45,14 +48,12 @@ model= LLMSAC(
     "MultiInputPolicy",
     env,
     policy_kwargs=policy_kwargs,
-    # learning_starts=0,
+    learning_starts=0,
     learning_rate=3e-4,
     buffer_size= 80000,
     gamma=0.9,
     epsilon_llm=ep,
-    dropout_position=0.2,
-    residual_rl= residual,
-    tensorboard_log="tmp/pickplace_tb/",
+    # tensorboard_log="tmp/pickplace_tb/",
 )
 
 model.learn(total_timesteps=80000,callback=checkpoint_callback,tb_log_name= name)

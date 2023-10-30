@@ -30,8 +30,6 @@ class LLMSAC(SAC):
         learning_starts: int = 100,
         batch_size: int = 256,
         epsilon_llm:Tuple[float,str] = (0.0, "fixed"), #auto
-        dropout_position: float= 0,
-        residual_rl: bool = False,
         tau: float = 0.005,
         gamma: float = 0.99,
         train_freq: Union[int, Tuple[int, str]] = 1,
@@ -55,8 +53,6 @@ class LLMSAC(SAC):
         _init_setup_model: bool = True,
     ):
         self.epsilon_llm = epsilon_llm
-        self.dropout_position = dropout_position
-        self.residual_rl = residual_rl
         super().__init__(
             policy,
             env,
@@ -155,59 +151,7 @@ class LLMSAC(SAC):
         for gradient_step in range(gradient_steps):
             # Sample replay buffer
             replay_data = self.replay_buffer.sample(batch_size, env=self._vec_normalize_env)  # type: ignore[union-attr]
-            # import time
-            # start = time.time()
-            if self.dropout_position > 0:
-                with th.no_grad():
-                    replay_data = copy.deepcopy(replay_data)
-                    # print("*******************replay_data",replay_data.observations['image'])
-                    # print(replay_data.observations['image'].shape)
-                    ## ramdomly mask the position for replay buffer
-                    shape = replay_data.observations['image'].shape
-                    prob = (1-self.dropout_position)*th.ones(shape[0],shape[1]//2)
-                    mask_half = th.bernoulli(prob)
-                    if self.residual_rl:
-                        dropout_action = replay_data.actions[:,1:-2]
-                        mask_half[:,-1] = th.ones(shape[0])
-                        for i in range(shape[0]):
-                            action = dropout_action[i].argmax()
-                            # the center block is masked
-                            if mask_half[i,action] == 0:
-                                _action = copy.deepcopy(replay_data.actions[i])
-                                _action[1:-2-1] = -1
-                                _action[-3] = 1
-                                _action[-2:] =  replay_data.observations['image'][i][action*2:action*2+2]+_action[-2:] - th.tensor([1,1]).to(self.device)
-                                replay_data.actions[i] = _action
-                                # print("***_action",_action)
-                                # print(replay_data.observations['image'][i])
-                                # print(replay_data.actions[i])
-
-                    mask = th.repeat_interleave(mask_half,2,dim=1).to(self.device)
-                    dropout_obs = replay_data.observations['image']*mask
-                    dropout_obs_next = replay_data.next_observations['image']*mask
-
-                        # transfer the action to the absolute position
-                        # observation_gap = replay_data.observations['image'] - dropout_obs
-                    #     # observation [0 1] action space[-1,1]
-                    #     a = observation_gap[:,0::2]
-                    #     b = observation_gap[:,1::2]
-                    #     x = a[th.arange(a.size(0)),replay_data.actions[:,1:-2].argmax(dim=1)]
-                    #     y = b[th.arange(b.size(0)),replay_data.actions[:,1:-2].argmax(dim=1)]
-                    #     xy = th.stack((x,y),dim=1)
-                    #     replay_data.actions[:,-2:] += xy
-                    #     # print(xy.shape)
-                    #     # print(xy)
-                    #     # print(replay_data.actions)
-                    replay_data.observations['image'] = dropout_obs
-                    replay_data.next_observations['image'] = dropout_obs_next
-                    # print("time prepo:",time.time()-start)
-
-            # print(mask)
-            # print("*******************replay_data",replay_data.observations['image'])
-
-
-
-            ## drop out for the position
+        
 
             # Action by the current actor for the sampled state
             actions_pi, log_prob = self.actor.action_log_prob(replay_data.observations)

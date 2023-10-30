@@ -51,6 +51,7 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
+        <!-- <mesh filename="tip.obj" scale="0.001 0.001 0.001"/> -->
         <mesh filename="tip.obj" scale="0.001 0.001 0.001"/>
       </geometry>
       <material name="blue">
@@ -63,7 +64,7 @@
         <mesh filename="tip.obj" scale="0.001 0.001 0.001"/>
       </geometry> -->
       <geometry>
-        <cylinder length="0.028" radius="0.001"/>
+        <cylinder length="0.028" radius="0.00001"/>
       </geometry>
     </collision>
   </link>

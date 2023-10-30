@@ -121,7 +121,8 @@ class Suction():
           ee: int representing PyBullet ID of end effector link.
           obj_ids: list of PyBullet IDs of all suctionable objects in the env.
         """
-
+        self.robot = robot
+        self.ee = ee
         self.activated = False
 
         # Load suction gripper base model (visual only).
@@ -198,7 +199,7 @@ class Suction():
        self.obj_ids = {}
        self.obj_ids['rigid'] = obj_ids
 
-    def activate(self):
+    def activate(self,action,depth):
         """Simulate suction using a rigid fixed constraint to contacted object."""
         # del def_ids
 
@@ -206,17 +207,43 @@ class Suction():
             points = pybullet.getContactPoints(bodyA=self.body, linkIndexA=0)
             # print(points)
             if points:
-
+              print("action:",action)
+              h,w = depth.shape
+              action_h= int(action[1])
+              action_w = int(action[2])
+              hh =  np.clip(action_h + 3,0,h)
+              hl =  np.clip(action_h - 3,0,h)
+              wh =  np.clip(action_w + 3,0,w)
+              wl =  np.clip(action_w - 3,0,w)
+              dp_map = depth[hl:hh,wl:wh]
+              dp_map = (dp_map>0.005)
+              occupied = np.sum(dp_map)/(dp_map.shape[0]*dp_map.shape[1])
+              # print("depth:",dp_map)
+              # print("occupied:",occupied)
+              if occupied>0.75:
                 # Handle contact between suction with a rigid object.
                 for point in points:
                     obj_id, contact_link = point[2], point[4]
+                    # print("contact_information:",
+                    #       "contact_flag:",point[0],
+                    #       "bodyA:",point[1],
+                    #       "bodyB:",point[2],
+                    #       "linkA:",point[3],
+                    #       "linkB:",point[4],
+                    #       "positionOnA:",point[5],
+                    #       "positionOnB:",point[6],
+                    #       "contactNormalOnB:",point[7],
+                    #       "contactDistance:",point[8],
+                    #       )
+                    # ee_xyz = np.float32(pybullet.getLinkState(self.robot, self.ee)[0])
+                    # print("ee_xyz:",np.array(ee_xyz)-np.array(point[5]))
                 if obj_id in self.obj_ids['rigid']:
                     body_pose = pybullet.getLinkState(self.body, 0)
                     obj_pose = pybullet.getBasePositionAndOrientation(obj_id)
                     world_to_body = pybullet.invertTransform(body_pose[0], body_pose[1])
                     obj_to_body = pybullet.multiplyTransforms(world_to_body[0],
-                                                       world_to_body[1],
-                                                       obj_pose[0], obj_pose[1])
+                                                      world_to_body[1],
+                                                      obj_pose[0], obj_pose[1])
                     self.contact_constraint = pybullet.createConstraint(
                         parentBodyUniqueId=self.body,
                         parentLinkIndex=0,

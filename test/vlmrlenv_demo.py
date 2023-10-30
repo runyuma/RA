@@ -1,26 +1,22 @@
-# from environments.rl_environment import TestEnv,PickOrPlaceEnvWithoutLangReward,SimplifyPickOrPlaceEnvWithoutLangReward,SimplifyPickEnvWithoutLangReward
 import os
 import sys
 # print(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from environments.pickplace_environment_residual import ResPickOrPlaceEnvWithoutLangReward,ResSimplifyPickOrPlaceEnvWithoutLangReward
-from environments.dummy_environment import dummypick
-from tasks.task import PutBowlInBowl,PickBowl
+from environments.pickplace_environment_residual import ResPickOrPlaceEnvWithoutLangReward
 import numpy as np
-import matplotlib.pyplot as plt
-from environments.utils import mouse_demo
-from tasks.task import PutBlockInBowl
-from tasks.letter import Letter
-import cv2
-import sys
 
-one_hot = True
-residual = True
-# env = ResSimplifyPickOrPlaceEnvWithoutLangReward(render=True,multi_discrete=True,scale_action=True,ee = "suction",scale_obs=True,one_hot_action = True)
+# import matplotlib.pyplot as plt
+from environments.utils import mouse_demo
+from tasks.letter import PutLetterOontheBowl
+import cv2
+import matplotlib
+matplotlib.use('TKAgg')
+import matplotlib.pyplot as plt
+
 env = ResPickOrPlaceEnvWithoutLangReward(
-                                        task= Letter,
+                                        task= PutLetterOontheBowl,
                                          image_obs=True,
-                                         residual=residual,
+                                         residual=True,
                                          observation_noise=5,
                                          render=True,
                                          multi_discrete=False,
@@ -29,26 +25,33 @@ env = ResPickOrPlaceEnvWithoutLangReward(
                                          scale_obs=True,
                                          neglect_steps=False,
                                          one_hot_action = True)
-# env = ResSimplifyPickOrPlaceEnvWithoutLangReward(task= PickBowl,render=True,multi_discrete=True,scale_action=True,scale_obs=True,one_hot_action = True)
-# env = ResSimplifyPickOrPlaceEnvWithoutLangReward(task= PutBowlInBowl,render=True,multi_discrete=True,scale_action=True,scale_obs=True,ee = "suction",one_hot_action = True)
-# env = ResPickOrPlaceEnvWithoutLangReward(render=True,multi_discrete=True,scale_action=True,scale_obs=True,one_hot_action = True)
-print(env.observation_space)
-print(env.action_space)
-
+residual = True
+one_hot = True
 np.random.seed(0)
 obs,_ = env.reset()
-fig, axs = plt.subplots(1, 2, figsize=(13, 7))
-plt.cla()
+plot_num = env.observation_space["rgbd"].shape[0]
+# print("obj_num:",plot_num,env.observation_space["rgbd"])
+
 while True:
+    plt.clf()
     if env.image_obs:
-        # print(obs["rgbd"][:,:,:3].max())
-        # cv2.imshow("color0",obs["rgbd"][:,:,:3])
-        # cv2.imshow("depth0",obs["rgbd"][:,:,3])
-        image = env.get_image()[:, :, ::-1]
-        cv2.imshow("color0",image)
-        cv2.imshow("depth0",20*env.get_depth())
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+        for i in range(plot_num):
+            
+            plt.subplot(2,plot_num,i+1)
+            plt.imshow(obs["rgbd"][i,:,:,:3])
+            plt.subplot(2,plot_num,i+1+plot_num)
+            plt.imshow(obs["rgbd"][i,:,:,3])
+        plt.show()
+            
+        # print(obs["rgbd"].shape)
+        # # print(obs["rgbd"][:,:,:3].max())
+        # # cv2.imshow("color0",obs["rgbd"][:,:,:3])
+        # # cv2.imshow("depth0",obs["rgbd"][:,:,3])
+        # image = env.get_image()[:, :, ::-1]
+        # cv2.imshow("color0",image)
+        # cv2.imshow("depth0",20*env.get_depth())
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
     image = env.get_image()
     print("obs: ", obs["image"])
     print("primitive: 0 for pick, 1 for place")
@@ -70,7 +73,7 @@ while True:
                 obs_pos = obs_pos*224
             res = np.array(pick_point) - obs_pos
             if env.scale_action:
-                res = res/112
+                res = res/env.residual_region
             if one_hot:
                 act = np.concatenate((np.array([primitive]),obj_one_hot,res))
             else:
@@ -81,24 +84,9 @@ while True:
         act = env.get_expert_demonstration()
         print("expert demonstration:",act)
     obs, reward, done,_, info = env.step(act)
+    if done:
+        break
     print("#################goal:",obs["lang_goal"])
     print("reward:",reward)
     print("info:",info)
     plt.pause(1)
-    
-    
-    if done:
-        break
-
-# plt.subplot(1, 3, 1)
-# img = obs["image"]
-# plt.title('color-view')
-# plt.imshow(img)
-# plt.subplot(1, 3, 2)
-# img = env.get_camera_image_top()
-# img = obs["depth"]
-# plt.title('depth-view')
-# plt.imshow(img)
-# plt.subplot(1,3,3)
-# plt.imshow(env.get_camera_image())
-# plt.show()

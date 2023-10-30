@@ -278,3 +278,9 @@ Todo next week
 - changing the environment to exploration behavior (inverse action?)
 - drop out as behavior of environment or agent(data augementation)?
 2. net arch
+## 
+RL improve from imperfect LLM and VLM, learn to compensate, with some difficult task and pure LLM and VLM as baseline
+comparison
+- letters in the bowl/box
+- VLM+RL with hand craft VLM(center)
+- VLM+RL with VLM+RL+LLM

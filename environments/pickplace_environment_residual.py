@@ -45,24 +45,30 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
         obj_num = len(self.task.category_names)
         goal_num = self.task.goal_num
         self.one_hot_action = one_hot_action
-        if self.residual:
-                obj_num += 1
+        if hasattr(self.task,"residual_region"):
+            self.residual_region = self.task.residual_region
+        else:
+            self.residual_region = self.image_size[0]/2
+
         if image_obs:
-            # self.observation_space = spaces.Dict({
-            #     "image": spaces.Box(0, 1, image_size + (4,), dtype=np.float32),
-            #     "lang_goal": spaces.Box(-5, 5, (512,), dtype=np.float32),
-            #     "clip_image": spaces.Box(-5, 5, (512,), dtype=np.float32),
-            #     "object_in_hand": spaces.Box(0, 1, (1,), dtype=np.bool8),
-            #     "lang_recommendation": spaces.Box(low=np.array([0, 0, 0]),high=np.array([1, 1, 1]),dtype=np.float32),
-            # })
-            image_size = (int(image_size[0]*self.reshape_para),int(image_size[1]*self.reshape_para))
-            
-            self.observation_space = spaces.Dict({
-                    "rgbd": spaces.Box(0, 1, image_size + (4,), dtype=np.float32),
-                    "image": spaces.Box(0, 1, (obj_num*2,), dtype=np.float32),
-                    "lang_goal": spaces.Box(0, obj_num, (goal_num,), dtype=np.int32),
-                    "object_in_hand": spaces.Box(0, 1, (1,), dtype=np.bool8),
-                })
+            if not self.residual:
+                image_size = (int(image_size[0]*self.reshape_para),int(image_size[1]*self.reshape_para))
+                
+                self.observation_space = spaces.Dict({
+                        "rgbd": spaces.Box(0, 1, image_size + (4,), dtype=np.float32),
+                        "image": spaces.Box(0, 1, (obj_num*2,), dtype=np.float32),
+                        "lang_goal": spaces.Box(0, obj_num, (goal_num,), dtype=np.int32),
+                        "object_in_hand": spaces.Box(0, 1, (1,), dtype=np.bool8),
+                    })
+            else:
+                h = int(self.residual_region*2)
+                w = int(self.residual_region*2)
+                self.observation_space = spaces.Dict({
+                        "rgbd": spaces.Box(0, 1, (obj_num,h,w,4), dtype=np.float32),
+                        "image": spaces.Box(0, 1, (obj_num*2,), dtype=np.float32),
+                        "lang_goal": spaces.Box(0, obj_num, (goal_num,), dtype=np.int32),
+                        "object_in_hand": spaces.Box(0, 1, (1,), dtype=np.bool8),
+                    })
         else:
             if not scale_obs:
                 self.observation_space = spaces.Dict({
@@ -77,41 +83,35 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
                     "object_in_hand": spaces.Box(0, 1, (1,), dtype=np.bool8),
                 })
 
-        if not multi_discrete:
-            # shit not positive
-            # solution? add a object in the center? change action space to -1,1
-            if self.residual:
-                if self.one_hot_action:
-                    low = - np.ones((1+obj_num+2,))
-                    low[0:-2] = 0*low[0:-2]
-                    high = np.ones((1+obj_num+2,))
-                    if not scale_action:
-                        high[-2] = self.image_size[0]
-                        high[-1] = self.image_size[1]
-                    self.action_space = spaces.Box(low=low,high=high,dtype=np.float32)
-                else:
-                    low = - np.ones((4,))# motion primitive/object index/position
-                    high = np.ones((4,))
-                    if not scale_action:
-                        high[-2] = self.image_size[0]
-                        high[-1] = self.image_size[1]
-                    self.action_space = spaces.Box(low=low,high=high,dtype=np.float32)
-            else:
-                low = np.zeros((3,))
-                high = np.ones((3,))
+
+        if self.residual:
+            if self.one_hot_action:
+                low = - np.ones((obj_num+3,))
+                low[0:-2] = 0*low[0:-2]
+                high = np.ones((obj_num+3,))
                 if not scale_action:
-                    high[-2] = self.image_size[0]
-                    high[-1] = self.image_size[1]
+                    high[-2] = self.residual_region
+                    high[-1] = self.residual_region
                 self.action_space = spaces.Box(low=low,high=high,dtype=np.float32)
+            else:
+                low = - np.ones((4,))# motion primitive/object index/position
+                high = np.ones((4,))
+                if not scale_action:
+                    high[-2] = self.residual_region
+                    high[-1] = self.residual_region
+                self.action_space = spaces.Box(low=low,high=high,dtype=np.float32)
+        else:
+            low = np.zeros((3,))
+            high = np.ones((3,))
+            if not scale_action:
+                high[-2] = self.residual_region
+                high[-1] = self.residual_region
+            self.action_space = spaces.Box(low=low,high=high,dtype=np.float32)
                 # self.action_space = spaces.Box(low=np.array([0, 0, 0]),high=np.array([1, self.image_size[0], self.image_size[1]]),dtype=np.float32)
 
-        else:
-            self.action_space = spaces.MultiDiscrete([2, self.image_size[0], self.image_size[1]])
+
         self.max_steps = 10 # task.max_steps
 
-        if languange_expert:
-            import clip
-            self.clip_model, self.clip_preprocess = clip.load("ViT-B/32", device="cpu")
 
     def reset(self,seed = None):
         self.last_pick_success = 0
@@ -121,6 +121,7 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
             "obj_position":[],
         }
         # get observation && ground truth position
+        self.observation = None
         obs,info = super().reset()
         self.observation = obs
         return obs,info
@@ -140,7 +141,7 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
                 obj_index = action[1]
                 obj_pos = observation["image"][2*obj_index:2*obj_index+2]
             if self.scale_action:
-                residual = action[-2:]*self.image_size[0]/2
+                residual = action[-2:]*self.residual_region
             else:
                 residual = action[-2:]
             if self.scale_obs:
@@ -198,7 +199,7 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
         
         self.step_count += 1
         print("action ",raw_action,"real action",action)
-        print("reward",reward)
+        print("reward",reward,"done: ",done)
         print("###############time:",time.time()-start_time,"obs time:",time.time()-obs_start_time)
         print("observation:",observation["image"], observation["object_in_hand"])
         info = self.get_info()
@@ -241,7 +242,10 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
                     break
 
             # Pick up object.
-            self.gripper.activate()
+            if self.ee_type == "suction":
+                self.gripper.activate(action,self.depth)
+            else:
+                self.gripper.activate()
             for _ in range(240):
                 self.step_sim_and_render()
             moving_time = 0
@@ -349,7 +353,7 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
             last_pos = self.pos_list
             # print("last_pos",type(last_pos))
             pos_list = last_pos[:]
-            
+            changed_idxs = []
             for idx,key in enumerate(keys):
                 # update position observation only if the object is moved
                 _pos = xyz_to_pix(self.obj_pos[key],BOUNDS,PIXEL_SIZE)
@@ -361,6 +365,7 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
                     # print("noise",noise)
                     _pos = [int(_pos[0]+noise[0]),int(_pos[1]+noise[1])] 
                     pos_list[2*idx:2*idx+2] = _pos
+                    changed_idxs.append(idx)
         else:
             pos_list = []
             for idx,key in enumerate(keys):
@@ -374,17 +379,36 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
                 _pos = [int(_pos[0]+noise[0]),int(_pos[1]+noise[1])]
                 pos_list += _pos
             
-            if self.residual:
-                pos_list += [0.5*self.image_size[0],0.5*self.image_size[1]] 
-            
  
         self.pos_list = pos_list
         self.depth = self.get_depth(BOUNDS,PIXEL_SIZE)
         if self.image_obs:
             image = self.get_image()/255
             rgbd = np.concatenate([image,self.height_coef *self.depth[:,:,None]],axis=2)
-            rgbd_resize = cv2.resize(rgbd,dsize=None,fx=self.reshape_para,fy=self.reshape_para)
-            obs["rgbd"] = rgbd_resize
+            if not self.residual:
+                rgbd_resize = cv2.resize(rgbd,dsize=None,fx=self.reshape_para,fy=self.reshape_para)
+                obs["rgbd"] = rgbd_resize
+            else:
+                rgbd = cv2.resize(rgbd,dsize=None,fx=0.5,fy=0.5)
+                if self.observation == None:
+                    obs["rgbd"] = [] 
+                    for i in range(len(self.task.category_names)):
+                        pos = pos_list[2*i:2*i+2]
+                        half_size = self.residual_region
+                        patch = extract_sub_image_with_padding(rgbd, pos[0]//2, pos[1]//2, half_size*2, half_size*2)
+                        obs["rgbd"].append(patch)
+                    obs["rgbd"] = np.array(obs["rgbd"])
+                else:
+                    obs["rgbd"] = self.observation["rgbd"]
+                    for idx in changed_idxs:
+                        pos = pos_list[2*idx:2*idx+2]
+                        half_size = self.residual_region
+                        patch = extract_sub_image_with_padding(rgbd, pos[0]//2, pos[1]//2, half_size*2, half_size*2)
+                        obs["rgbd"][idx] = patch
+
+
+
+
         
         if not self.scale_obs:
             obs["image"] = np.array(pos_list)
@@ -427,279 +451,35 @@ def out_of_bound(pos,BOUNDS):
             return True
     else:
         return False
-class ResSimplifyPickOrPlaceEnvWithoutLangReward(ResPickOrPlaceEnvWithoutLangReward):
-    def __init__(self,
-                 task = PutBlockInBowl,
-                 render=False,
-                 multi_discrete=False,
-                 neglect_steps=True,
-                 scale_obs=True,
-                 scale_action=False,
-                 ee = "gripper",
-                 one_hot_action=False):
-        super().__init__(
-                        task = task,
-                        image_obs=False,
-                        languange_expert=False,
-                        multi_discrete=multi_discrete,
-                        scale_obs=scale_obs,
-                        scale_action= scale_action,
-                        ee = ee,
-                        neglect_steps=neglect_steps,
-                        render=render,
-                        one_hot_action=one_hot_action
-                        )
-    def get_reward(self,observation,action):
-        reward,done = self.task.reward(observation,action,self,BOUNDS,PIXEL_SIZE,xyz_to_pix)
-        return reward,done
-    def get_expert_demonstration(self):
-        desired_action = self.task.exploration_action(self)
-        return desired_action
-    # def get_expert_demonstration(self):
-    #     print("get_expert_demonstration")
-    #     # print(self.observation)
-    #     object_in_hand = self.last_pick_success
-    #     obj_pos = self.pos_list
-    #     goals = self.task.goals
-    #     obj_num = len(self.task.category_names)
-    #     print("obj_pos",obj_pos)
-    #     print("goals",goals)
-    #     if object_in_hand:
-    #         picked_obj = 0
-    #         for obj in self.task.config['pick']:
-    #             if self.obj_pos[obj][2] >= 0.2:
-    #                 picked_obj = obj
-    #                 print("picked_obj",picked_obj)
-            
-    #         if picked_obj == self.task.config['pick'][goals[0]]:
-    #             place_obj = goals[1]+len(self.task.config['pick'])
-    #             res = np.array([0,0])
-    #         else:
-    #             place_obj = np.random.randint(0,obj_num)
-    #             res = np.random.randint(0,self.image_size[0]/4,(2,))
+def extract_sub_image_with_padding(image, x, y, h, w):
 
-    #         if self.one_hot_action:
-    #             one_hot_idx = [1 if i== place_obj else 0  for i in range(obj_num)]
-    #             idx = one_hot_idx
-    #         else:
-    #             idx = [place_obj]
-
-    #         if self.scale_action:
-    #             res = np.array(res)/self.image_size[0]
-    #         desired_action = [1]+ idx + res.tolist()
-            
-
-    #     else:
-    #         picked_obj = goals[0]
-    #         if self.one_hot_action:
-    #             one_hot_idx = [1 if i== picked_obj else 0  for i in range(obj_num)]
-    #             idx = one_hot_idx
-    #         else:
-    #             idx = [picked_obj]
-    #         res = np.array([0,0])
-    #         if self.scale_action:
-    #             res = np.array(res)/self.image_size[0]
-    #         desired_action = [0]+ idx + res.tolist()
-
-    #     print("desired_action",desired_action)
-    #     return np.array(desired_action)
     
+    # Calculate top left and bottom right coordinates of the sub-image
+    top_left_y = y - h//2
+    top_left_x = x - w//2
+    bottom_right_y = y + h//2
+    bottom_right_x = x + w//2
     
-# class ResPickOrPlaceEnvWithoutLangReward(ResPickOrPlaceEnvWithoutLangReward):
-#     def __init__(self,render=False,multi_discrete=False,neglect_steps=True,scale_obs=True,scale_action=True,one_hot_action=False):
-#         task = PutBlockInBowl
-#         super().__init__(task,
-#                         image_obs=True,
-#                         languange_expert=False,
-#                         multi_discrete=multi_discrete,
-#                         scale_obs=scale_obs,
-#                         scale_action= scale_action,
-#                         neglect_steps=neglect_steps,
-#                         render=render,
-#                         one_hot_action=one_hot_action
-#                         )
-#     def get_reward(self,observation,action):
-#         phase_penalty = 0.25
-#         done = False
-#         reward = 0
-#         last_pos = self.obj_pos
-#         desired_primitive = self.last_pick_success
-#         if self.last_pick_success:
-#             desired_position = last_pos[self.task.config['place'][self.task.goals[1]]]
-#             desired_position = xyz_to_pix(desired_position,BOUNDS,PIXEL_SIZE)
-#             desired_action = [desired_primitive]+desired_position[:2]
-#         else:
-#             desired_position = last_pos[self.task.config['pick'][self.task.goals[0]]]
-#             desired_position = xyz_to_pix(desired_position,BOUNDS,PIXEL_SIZE)
-#             desired_action = [desired_primitive]+desired_position[:2]
-#         y = self.last_pick_success
-#         print("desired_action :",desired_action)
-#         cross_ent = y*np.log(action[0]+0.001)+(1-y)*np.log(1-action[0]+0.001)
-#         phase_loss = -cross_ent*phase_penalty
-#         phase_loss = np.clip(phase_loss,0, phase_penalty)
-#         reward -= phase_loss
-#         print("phase_loss",phase_loss)
-#         dis_loss = 0
-#         if (action[0] < 0.5) and ( not self.last_pick_success):
-#             dis = np.linalg.norm(action[1:]-desired_action[1:])
-#             # dis_loss = 0.25*3/(0.5*dis+3)
-#             thre = 100
-#             dis_loss = - (dis/thre,1)[dis>thre]**2*0.25
-#             reward += dis_loss
-#         if action[0] > 0.5 and self.last_pick_success:
-#             dis = np.linalg.norm(action[1:]-desired_action[1:])
-#             thre = 100
-#             dis_loss = - (dis/thre,1)[dis>thre]**2*0.25
-#             reward += dis_loss  
-#         print("dis_reward",dis_loss)        
-#         done = (self.step_count >= self.max_steps)
-#         _reward,_done = self.task.get_reward(self)
-#         if _done:
-#             self.success = True
-#         else:
-#             self.success = False
-#         reward += _reward
-#         done |= _done
-#         return reward,done
-#     def get_expert_demonstration(self):
-#         print("get_expert_demonstration")
-#         # print(self.observation)
-#         object_in_hand = self.last_pick_success
-#         obj_pos = self.pos_list
-#         goals = self.task.goals
-#         obj_num = len(self.task.category_names)
-#         print("obj_pos",obj_pos)
-#         print("goals",goals)
-#         if object_in_hand:
-#             picked_obj = 0
-#             for obj in self.task.config['pick']:
-#                 if self.obj_pos[obj][2] >= 0.2:
-#                     picked_obj = obj
-#                     print("picked_obj",picked_obj)
-            
-#             if picked_obj == self.task.config['pick'][goals[0]]:
-#                 place_obj = goals[1]+len(self.task.config['pick'])
-#                 res = np.array([0,0])
-#             else:
-#                 place_obj = np.random.randint(0,obj_num)
-#                 res = np.random.randint(0,self.image_size[0]/4,(2,))
+    # Create an output image filled with the padding value
+    rgb = np.ones((h, w, 3), dtype=np.float32) * 45/255
+    depth = np.ones((h, w), dtype=np.float32) * 0
+    output_image = np.concatenate( (rgb, depth[:,:,None]), axis=2)
 
-#             if self.one_hot_action:
-#                 one_hot_idx = [1 if i== place_obj else 0  for i in range(obj_num)]
-#                 idx = one_hot_idx
-#             else:
-#                 idx = [place_obj]
-
-#             if self.scale_action:
-#                 res = np.array(res)/self.image_size[0]
-#             desired_action = [1]+ idx + res.tolist()
-            
-
-#         else:
-#             picked_obj = goals[0]
-#             if self.one_hot_action:
-#                 one_hot_idx = [1 if i== picked_obj else 0  for i in range(obj_num)]
-#                 idx = one_hot_idx
-#             else:
-#                 idx = [picked_obj]
-#             res = np.array([0,0])
-#             if self.scale_action:
-#                 res = np.array(res)/self.image_size[0]
-#             desired_action = [0]+ idx + res.tolist()
-
-#         print("desired_action",desired_action)
-#         return np.array(desired_action)
     
-class SimplifyPickEnvWithoutLangReward(ResPickOrPlaceEnvWithoutLangReward):
-    def __init__(self,render=False,multi_discrete=False,neglect_steps=True):
-        task = PickBlock
-        super().__init__(task,
-                        image_obs=False,
-                        languange_expert=False,
-                        multi_discrete=multi_discrete,
-                        scale_obs=True,
-                        scale_action= False,
-                        neglect_steps=neglect_steps,
-                        render=render
-                        )
-
-
-    def get_reward(self,observation,action):
-        phase_penalty = 0.25
-        damage_penalty = 0.25
-        done = False
-        time_penalty = -0.1
-        reward = 0
-        last_pos = self.obj_pos
-        desired_primitive = self.last_pick_success
-        if self.last_pick_success:
-            desired_position = [0,0]
-            print("desired_position",desired_position)
-            desired_position = xyz_to_pix(desired_position,BOUNDS,PIXEL_SIZE)
-            desired_action = [desired_primitive]+desired_position[:2]
-        else:
-            desired_position = last_pos[self.task.config['pick'][self.task.goals[0]]]
-            desired_position = xyz_to_pix(desired_position,BOUNDS,PIXEL_SIZE)
-            desired_action = [desired_primitive]+desired_position[:2]
-        y = self.last_pick_success
-        print("desired_action :",desired_action)
-        cross_ent = y*np.log(action[0]+0.001)+(1-y)*np.log(1-action[0]+0.001)
-        phase_loss = -cross_ent*phase_penalty
-        phase_loss = np.clip(phase_loss,0, phase_penalty)
-        reward -= phase_loss
-        print("phase_loss",phase_loss)
-        dis_loss = 0
-        if (action[0] < 0.5) and ( not self.last_pick_success):
-            dis = np.linalg.norm(action[1:]-desired_action[1:])
-            # dis_loss = 0.25*3/(0.5*dis+3)
-            thre = 100
-            dis_loss = - (dis/thre,1)[dis>thre]**2*0.25
-            reward += dis_loss
-        print("dis_reward",dis_loss)        
-        done = (self.step_count >= self.max_steps)
-        _reward,_done = self.task.get_reward(self)
-        if _done:
-            self.success = True
-        else:
-            self.success = False
-        reward += _reward
-        done |= _done
-        return reward,done
+    # Calculate the overlapping region between the sub-image and the input image
+    overlap_top_y = max(top_left_y, 0)
+    overlap_top_x = max(top_left_x, 0)
+    overlap_bottom_y = min(bottom_right_y, image.shape[0])
+    overlap_bottom_x = min(bottom_right_x, image.shape[1])
     
-    def get_expert_demonstration(self):
-        print("get_expert_demonstration")
-        # print(self.observation)
-        object_in_hand = self.last_pick_success
-        obj_pos = self.pos_list
-        goals = self.task.goals
-        print("obj_pos",obj_pos)
-        print("goals",goals)
-        if object_in_hand:
-            # desired_position = obj_pos[6+2*goals[1]:8+2*goals[1]]
-            desired_action = [1] + np.random.randint(0,self.image_size[0],(2,)).tolist()
-        else:
-            desired_position = obj_pos[2*goals[0]:2*goals[0]+2]
-            desired_action = [0] + desired_position[:2]
-        desired_action = np.array(desired_action)
-        print("desired_action",desired_action)
-        if self.scale_action:
-            desired_action = self.scale_action(desired_action)
-        return desired_action
-    
-    def scale_action(self,action):
-        action[1:] = action[1:]/self.image_size[0]
-        return action
-    
+    # Calculate where to place the overlapping region in the output image
+    start_y = overlap_top_y - top_left_y
+    start_x = overlap_top_x - top_left_x
 
-    def get_info(self):
+    # print("overlap_top_x",overlap_bottom_y - overlap_top_y)
+    # print("overlap_top_y",overlap_bottom_x - overlap_top_x)
+    output_image[start_x:start_x + (overlap_bottom_x - overlap_top_x),
+                 start_y:start_y + (overlap_bottom_y - overlap_top_y),] = image[overlap_top_x:overlap_bottom_x,overlap_top_y:overlap_bottom_y]
+    
+    return output_image
 
-        info = {   
-            'success':self.success
-        }
-        if 'TimeLimit.truncated' in self.info.keys():
-            info['TimeLimit.truncated'] = self.info['TimeLimit.truncated']
-        # self.info = {}
-        return info
-    def get_expert_demonstration(self):
-        desired_action = self.task.exploration_action(self)
-        return desired_action
