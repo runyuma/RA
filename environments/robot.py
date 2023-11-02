@@ -220,7 +220,7 @@ class Suction():
               occupied = np.sum(dp_map)/(dp_map.shape[0]*dp_map.shape[1])
               # print("depth:",dp_map)
               # print("occupied:",occupied)
-              if occupied>0.75:
+              if occupied>0.5:
                 # Handle contact between suction with a rigid object.
                 for point in points:
                     obj_id, contact_link = point[2], point[4]

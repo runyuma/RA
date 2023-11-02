@@ -7,14 +7,14 @@ import numpy as np
 
 # import matplotlib.pyplot as plt
 from environments.utils import mouse_demo
-from tasks.letter import PutLetterOontheBowl
+from tasks.letter import PutLetterOontheBowl,PutLetterontheBowl
 import cv2
 import matplotlib
 matplotlib.use('TKAgg')
 import matplotlib.pyplot as plt
 
 env = ResPickOrPlaceEnvWithoutLangReward(
-                                        task= PutLetterOontheBowl,
+                                        task= PutLetterontheBowl,
                                          image_obs=True,
                                          residual=True,
                                          observation_noise=5,

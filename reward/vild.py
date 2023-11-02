@@ -10,6 +10,7 @@ import PIL.ImageColor as ImageColor
 import PIL.ImageDraw as ImageDraw
 import PIL.ImageFont as ImageFont
 import time
+import tensorflow.compat.v1 as tf
 numbered_categories = [{"name": str(idx), "id": idx,} for idx in range(50)]
 numbered_category_indices = {cat["id"]: cat for cat in numbered_categories}
 
@@ -239,7 +240,7 @@ def draw_bounding_box_on_image(image,
   # If the total height of the display strings added to the top of the bounding
   # box exceeds the top of the image, stack the strings below the bounding box
   # instead of above.
-  print(font)
+  # print(font)
   display_str_heights = [font.font.getsize(ds)[1] for ds in display_str_list]
   # Each display_str has a top and bottom margin of 0.05x.
   total_display_str_height = (1 + 2 * 0.05) * sum(display_str_heights)
@@ -585,7 +586,7 @@ def vild(session,clip_model,image_path, category_name_string, params, plot_on=Tr
     category_name_string = category_name_string.replace(a, b)
   category_names = [x.strip() for x in category_name_string.split(";")]
   category_names = ["background"] + category_names
-  # print("Categories:", category_names)
+  print("Categories:", category_names)
   categories = [{"name": item, "id": idx+1,} for idx, item in enumerate(category_names)]
   category_indices = {cat["id"]: cat for cat in categories}
   
@@ -596,6 +597,7 @@ def vild(session,clip_model,image_path, category_name_string, params, plot_on=Tr
   #################################################################
   # Obtain results and read image
   start_time = time.time()
+  # with tf.device('/CPU:0'):
   roi_boxes, roi_scores, detection_boxes, scores_unused, box_outputs, detection_masks, visual_features, image_info = session.run(
         ["RoiBoxes:0", "RoiScores:0", "2ndStageBoxes:0", "2ndStageScoresUnused:0", "BoxOutputs:0", "MaskOutputs:0", "VisualFeatOutputs:0", "ImageInfo:0"],
         feed_dict={"Placeholder:0": [image_path,]})
@@ -658,6 +660,8 @@ def vild(session,clip_model,image_path, category_name_string, params, plot_on=Tr
   detection_masks = detection_masks[valid_indices][:max_boxes_to_draw, ...]
   detection_visual_feat = visual_features[valid_indices][:max_boxes_to_draw, ...]
   rescaled_detection_boxes = rescaled_detection_boxes[valid_indices][:max_boxes_to_draw, ...]
+  
+  # print("detection_visual_feat",detection_visual_feat.shape)
 
 
   #################################################################
@@ -680,8 +684,11 @@ def vild(session,clip_model,image_path, category_name_string, params, plot_on=Tr
   found_objects = []
   for a, b in prompt_swaps:
     category_names = [name.replace(b, a) for name in category_names]  # Extra prompt engineering.
-  for anno_idx in indices[0:int(rescaled_detection_boxes.shape[0])]:
+  scores_new = np.zeros((len(indices),len(category_names)))
+  for idx,anno_idx in enumerate(indices[0:int(rescaled_detection_boxes.shape[0])]):
     # print("Box:", rescaled_detection_boxes[anno_idx])
+    # print(scores_all[anno_idx])
+    # print(rescaled_detection_boxes[anno_idx])
     position = [0.5*(rescaled_detection_boxes[anno_idx][0]+rescaled_detection_boxes[anno_idx][2]),0.5*(rescaled_detection_boxes[anno_idx][1]+rescaled_detection_boxes[anno_idx][3])]
     box_sizes = [int(rescaled_detection_boxes[anno_idx][2] - rescaled_detection_boxes[anno_idx][0]) , int(rescaled_detection_boxes[anno_idx][3] - rescaled_detection_boxes[anno_idx][1])]
     box_sizes = [int(rescaled_detection_boxes[anno_idx][0]),
@@ -689,15 +696,15 @@ def vild(session,clip_model,image_path, category_name_string, params, plot_on=Tr
                   int(rescaled_detection_boxes[anno_idx][2]),
                   int(rescaled_detection_boxes[anno_idx][3])]
     scores = scores_all[anno_idx]
-    if np.argmax(scores) == 0:
-      continue
-    found_object = category_names[np.argmax(scores)]
+    scores_new[idx] = scores
+    found_object = category_names[np.argmax(scores[1:])+1]
     if found_object == "background":
       continue
-    print("Found a", found_object, "with score:", np.max(scores),"with position:",position)
-    found_objects.append((category_names[np.argmax(scores)],position,box_sizes,np.max(scores)))
+    if verbose:
+      print("Found a", found_object, "with score:", np.max(scores),"with position:",position)
+    found_objects.append((category_names[np.argmax(scores[1:])+1],position,box_sizes,np.max(scores)))
   if not plot_on:
-    return found_objects
+    return found_objects,scores_new,None
   
 
   #################################################################
@@ -705,7 +712,7 @@ def vild(session,clip_model,image_path, category_name_string, params, plot_on=Tr
   ymin, xmin, ymax, xmax = np.split(rescaled_detection_boxes, 4, axis=-1)
   processed_boxes = np.concatenate([xmin, ymin, xmax - xmin, ymax - ymin], axis=-1)
   segmentations = paste_instance_masks(detection_masks, processed_boxes, image_height, image_width)
-  print("Found", len(segmentations), "objects")
+  # print("Found", len(segmentations), "objects")
   if verbose:
     if len(indices_fg) == 0:
         # display_image(np.array(image), size=overall_fig_size)
@@ -734,4 +741,4 @@ def vild(session,clip_model,image_path, category_name_string, params, plot_on=Tr
   else:
     image_with_detections = image
 
-  return found_objects,image_with_detections
+  return found_objects,scores_new,image_with_detections

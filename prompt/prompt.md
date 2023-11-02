@@ -284,3 +284,35 @@ comparison
 - letters in the bowl/box
 - VLM+RL with hand craft VLM(center)
 - VLM+RL with VLM+RL+LLM
+## 
+letter prompt
+```
+The first Image is a top down view of a block with shape of letter {}. A robot want to pick up this letter with a suction gripper.We want you to design a function to sample the pick position in 2D to make a stable pick for the robot.
+
+[You should do]
+1. Assuming the input image size is [28,28]
+2. detect the letter, position and orientation of the letter
+3. based on the position and orientation of the letter, draw a 2D probability map [28,28] for the robot to sample the pick position in python 
+
+Rules:
+1. You can use any python library
+2. Do not always use center of mass as the pick position, you should consider the shape of the letter. For example get the contour of the letter and assign higher probability to the area inside the contour area.  
+3. provide only 1 python function with brief explanation, you can not use undefined function in your code
+```
+place letter prompt
+
+```
+The first image is a top down view of a block with shape of letter{O}, which is already picked by robot. Center of the image is robot pick position. The second image is a top down view of a {bowl}.  A robot want to place this letter on a bowl with a suction gripper.We want you to design a function to sample the place position in 2D to make a stable place for the robot.
+To illustrate the position, we assume place position [x,y], COM of picked object is [x1,y1], COM of placed object is [x2,y2], all those position is in image frame. After place, the COM of picked object would be [x1+x-w/2,y1+y-h/2] in the second image frame, translation is [x-w/2,y-h/2]. The shape of the picked object after place should have a good alignment with the shape of the placed object.
+
+[You should do]
+1. Assuming the input image size is [28,28]
+2. detect the objects and position of the picked object and placed object
+3. Each pixel of 2D probability map is the probability of the place position in this pixel. The robot gripper picked the object in the first image, and the center of the image is the robot pick position. The robot gripper place the object in the second image, you should find a place position in the second image that is easy to place the object to align with the {letter} with the {bowl}. 
+4. based on the position and shape of the picked object and placed object, draw a 2D probability map [28,28] for the robot to sample the place position in python 
+
+Rules:
+1. You can use only python library(numpy, opencv), input of the function is the image of the picked object and the image of the placed object. Some threshold parameters are allowed and can be an optional input of the function,for example: threshold of grey scale. 
+2. The place position is the pixel in the second image, the first image would always center at the placed position. A good place position should be easy to align the picked object with the placed object. 
+3. provide only 1 python function with brief explanation, you can not use undefined function in your code
+```

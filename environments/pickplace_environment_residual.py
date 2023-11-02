@@ -21,7 +21,7 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
                 residual = True,
                 image_obs = False,
                 observation_noise = 0,
-                languange_expert = False,
+                vlm = False,
                 multi_discrete = False,
                 scale_obs = True,
                 scale_action = True,
@@ -41,6 +41,11 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
         self.neglect_steps = neglect_steps
         self.scale_obs = scale_obs
         self.scale_action = scale_action
+        self.use_vlm = vlm
+        if self.use_vlm:
+            from reward.detector import VILD
+            self.vlm = VILD()
+
 
         obj_num = len(self.task.category_names)
         goal_num = self.task.goal_num
@@ -122,6 +127,7 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
         }
         # get observation && ground truth position
         self.observation = None
+        self.last_rgbd = None
         obs,info = super().reset()
         self.observation = obs
         return obs,info
@@ -189,7 +195,7 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
         obs_start_time = time.time()
         reward,done = self.get_reward(self.observation,action)
         if STEP_SIM:
-            observation = self.get_observation(pick_success)
+            observation = self.get_observation(pick_success,action)
             self.observation = observation
             self.last_pick_success = pick_success
         else:
@@ -200,7 +206,6 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
         self.step_count += 1
         print("action ",raw_action,"real action",action)
         print("reward",reward,"done: ",done)
-        print("###############time:",time.time()-start_time,"obs time:",time.time()-obs_start_time)
         print("observation:",observation["image"], observation["object_in_hand"])
         info = self.get_info()
         return observation, reward, done,False, info
@@ -334,7 +339,7 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
     def get_info(self):
         return self.info
     
-    def get_observation(self,pick_success=0):
+    def get_observation(self,pick_success=0,action=None):
 
         # todo
         obs = {}
@@ -342,20 +347,24 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
         lang_goal = self.task.goals
         obs['lang_goal'] = lang_goal
         self.obj_pos = self.get_object_position()
+        picked_obj = None
 
         if len(self.task.category_names) < len(self.task.config['pick'])+len(self.task.config['place']):
                 keys = self.task.config['pick']
         else:
             keys = self.task.config['pick']+self.task.config['place']
-        # print("hasattr",hasattr(self,'pos_list'))
+        
         if self.pos_list is not None:
-            
             last_pos = self.pos_list
             # print("last_pos",type(last_pos))
             pos_list = last_pos[:]
             changed_idxs = []
             for idx,key in enumerate(keys):
                 # update position observation only if the object is moved
+                if pick_success:
+                    if self.obj_pos[key][2]>0.2:
+                        picked_obj = idx
+                        print("picked_obj",picked_obj)
                 _pos = xyz_to_pix(self.obj_pos[key],BOUNDS,PIXEL_SIZE)
                 previous_pos = last_pos[2*idx:2*idx+2]
                 if np.linalg.norm(np.array(_pos) - np.array(previous_pos)) > 5:
@@ -375,7 +384,6 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
                 if np.linalg.norm(noise) > 5:
                     noise = noise/np.linalg.norm(noise)*4.8
 
-                # print("noise",noise)
                 _pos = [int(_pos[0]+noise[0]),int(_pos[1]+noise[1])]
                 pos_list += _pos
             
@@ -398,14 +406,23 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
                         patch = extract_sub_image_with_padding(rgbd, pos[0]//2, pos[1]//2, half_size*2, half_size*2)
                         obs["rgbd"].append(patch)
                     obs["rgbd"] = np.array(obs["rgbd"])
+                    
                 else:
                     obs["rgbd"] = self.observation["rgbd"]
                     for idx in changed_idxs:
-                        pos = pos_list[2*idx:2*idx+2]
-                        half_size = self.residual_region
-                        patch = extract_sub_image_with_padding(rgbd, pos[0]//2, pos[1]//2, half_size*2, half_size*2)
-                        obs["rgbd"][idx] = patch
-
+                        if picked_obj == idx and action is not None:
+                            pos = action[1:]
+                            print(int(pos[0]//2), int(pos[1]//2))
+                            half_size = self.residual_region
+                            patch = extract_sub_image_with_padding(self.last_rgbd, int(pos[0]//2), int(pos[1]//2), half_size*2, half_size*2)
+                            obs["rgbd"][idx] = patch
+                            
+                        else:   
+                            pos = pos_list[2*idx:2*idx+2]
+                            half_size = self.residual_region
+                            patch = extract_sub_image_with_padding(rgbd, pos[0]//2, pos[1]//2, half_size*2, half_size*2)
+                            obs["rgbd"][idx] = patch
+            self.last_rgbd = rgbd
 
 
 
@@ -477,9 +494,9 @@ def extract_sub_image_with_padding(image, x, y, h, w):
     start_x = overlap_top_x - top_left_x
 
 
-    print("start_x",start_x,"start_y",start_y)
-    print("overlap_top_x",overlap_top_x,"overlap_top_y",overlap_top_y)
-    print("overlap_bottom_x",overlap_bottom_x,"overlap_bottom_y",overlap_bottom_y)
+    # print("start_x",start_x,"start_y",start_y)
+    # print("overlap_top_x",overlap_top_x,"overlap_top_y",overlap_top_y)
+    # print("overlap_bottom_x",overlap_bottom_x,"overlap_bottom_y",overlap_bottom_y)
     output_image[start_x:start_x + (overlap_bottom_x - overlap_top_x),
                  start_y:start_y + (overlap_bottom_y - overlap_top_y),] = image[overlap_top_x:overlap_bottom_x,overlap_top_y:overlap_bottom_y]
     

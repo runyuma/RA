@@ -8,7 +8,7 @@ from agents.LLMRL import LLMSAC
 from agents.PolicyNet import CustomCombinedExtractor,FeatureExtractor,AttentionFeatureExtractor
 import numpy as np
 import matplotlib.pyplot as plt
-from tasks.letter import PutLetterOontheBowl
+from tasks.letter import PutLetterOontheBowl,PutLetterontheBowl
 
 from stable_baselines3 import SAC,PPO,TD3,DDPG,A2C,ppo
 from stable_baselines3.common.callbacks import CheckpointCallback
@@ -19,8 +19,9 @@ def train():
         if args[1] == "render":
             render = True
     policy_name = "llmsac_imgatten_withnoise"
-    task_name = "putblockbowl"
+    task_name = "PutLetterontheBowl"
     ep = (0.15,"fixed")
+    # ep = (1,"fixed")
     name = policy_name + str(100*ep[0])+ep[1]+task_name+"_model"
     checkpoint_callback = CheckpointCallback(
     save_freq=5000,
@@ -31,7 +32,7 @@ def train():
     )
 
     env = ResPickOrPlaceEnvWithoutLangReward(
-        task= PutLetterOontheBowl,
+        task= PutLetterontheBowl,
         image_obs=True,
         residual=True,
         observation_noise=5,

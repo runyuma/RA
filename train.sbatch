@@ -4,6 +4,7 @@ SBATCH --partition=general
 SBATCH --qos=short
 SBATCH --time=04:00:00
 SBATCH --cpus-per-task=2
+SBATCH --gres=gpu:1
 SBATCH --mem=16000
 SBATCH --mail-type=END
 
