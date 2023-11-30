@@ -27,7 +27,7 @@ env = ResPickOrPlaceEnvWithoutLangReward(
                                          one_hot_action = True)
 residual = True
 one_hot = True
-np.random.seed(0)
+np.random.seed(1)
 obs,_ = env.reset()
 plot_num = env.observation_space["rgbd"].shape[0]
 # print("obj_num:",plot_num,env.observation_space["rgbd"])

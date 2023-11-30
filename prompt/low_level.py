@@ -1,13 +1,12 @@
 import cv2
 import numpy as np
-# letter L
-def generate_pick_probability_map(img):
+
+def generate_pick_probability_map(img, threshold=100):
     # Load the image in grayscale
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     
     # Thresholding the image
-    # personally I change 127 to 100
-    _, thresh = cv2.threshold(img, 100, 255, cv2.THRESH_BINARY)
+    _, thresh = cv2.threshold(img, threshold, 255, cv2.THRESH_BINARY)
     
     # Find contours
     contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -27,6 +26,7 @@ def generate_pick_probability_map(img):
             # If the pixel is inside the contour, update the probability map
             if dist > 0:
                 prob_map[y, x] = np.clip(dist,0,3)
+                # prob_map[y, x] = dist
     
     # Normalize the probability map
     prob_map /= prob_map.sum()

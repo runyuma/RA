@@ -12,13 +12,8 @@ class Task():
                  ):
         self.colors = colors
         self.bounds = bounds
-        self.config = config
-        self.category_names = []
-        for i in range(len(self.config["pick"])):
-            self.category_names.append(self.config["pick"][i])
-        for i in range(len(self.config["place"])):    
-            if self.config["place"][i] not in self.category_names:
-                self.category_names.append(self.config["place"][i])
+        self.global_config = config
+        
         self.lang_template = lang_template
         self.goal_num = goal_num
         self.max_steps = 10
@@ -27,6 +22,13 @@ class Task():
     
     def reset(self,env):
         # Load objects according to config.
+        self.config = self.global_config
+        self.category_names = []
+        for i in range(len(self.config["pick"])):
+            self.category_names.append(self.config["pick"][i])
+        for i in range(len(self.config["place"])):    
+            if self.config["place"][i] not in self.category_names:
+                self.category_names.append(self.config["place"][i])
         timeout = True
         obj_names = list(self.config["pick"]) + list(self.config["place"])
         while timeout:

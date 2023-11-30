@@ -75,10 +75,10 @@ def pick_probability_map(image_path):
 
 image_path = 'prompt/img/L.png'
 # 
-image_path = 'prompt/img/V.png'
-# image_path = 'prompt/img/O.png'
-# prob_map = generate_pick_probability_map(image_path)
-prob_map = pick_probability_map(image_path)
+# image_path = 'prompt/img/V.png'
+image_path = 'prompt/img/O.png'
+prob_map = generate_pick_probability_map(image_path)
+# prob_map = pick_probability_map(image_path)
 
 
 import matplotlib
@@ -86,9 +86,14 @@ matplotlib.use('TKAgg')
 import matplotlib.pyplot as plt
 plt.subplot(1,2,1)
 plt.imshow(prob_map)
+# remove the axis
+plt.axis('off')
 plt.subplot(1,2,2)
 
-img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
-_, thresh = cv2.threshold(img, 100, 255, cv2.THRESH_BINARY)
-plt.imshow(thresh)
+img = cv2.imread(image_path)
+img = cv2.resize(img, (28,28))
+# _, thresh = cv2.threshold(img, 100, 255, cv2.THRESH_BINARY)
+plt.axis('off')
+# remove the axis
+plt.imshow(img)
 plt.show()

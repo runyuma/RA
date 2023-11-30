@@ -217,6 +217,7 @@ class Suction():
               wl =  np.clip(action_w - 3,0,w)
               dp_map = depth[hl:hh,wl:wh]
               dp_map = (dp_map>0.005)
+              # print("dp_map:",dp_map)
               occupied = np.sum(dp_map)/(dp_map.shape[0]*dp_map.shape[1])
               # print("depth:",dp_map)
               # print("occupied:",occupied)

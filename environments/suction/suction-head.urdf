@@ -64,7 +64,7 @@
         <mesh filename="tip.obj" scale="0.001 0.001 0.001"/>
       </geometry> -->
       <geometry>
-        <cylinder length="0.028" radius="0.00001"/>
+        <cylinder length="0.028" radius="0.005"/>
       </geometry>
     </collision>
   </link>

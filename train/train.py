@@ -55,7 +55,7 @@ def train():
         env,
         policy_kwargs=policy_kwargs,
         learning_starts=50,
-        learning_rate=3e-4,
+        learning_rate=0.5*3e-4,
         buffer_size= 80000,
         gamma=0.9,
         epsilon_llm=ep,

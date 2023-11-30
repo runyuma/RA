@@ -47,7 +47,7 @@ def stack_blocks(previous_actions):
 language command:put all objects in a line
 You should automated regress this line(k,b) according to the position of objects in [224,224] 2D space.
 ```python
-mport numpy as np
+import numpy as np
 from sklearn.linear_model import LinearRegression
 
 def function(previous_actions, objects):
@@ -295,7 +295,7 @@ The first Image is a top down view of a block with shape of letter {}. A robot w
 3. based on the position and orientation of the letter, draw a 2D probability map [28,28] for the robot to sample the pick position in python 
 
 Rules:
-1. You can use any python library
+1. You can use only python library(numpy, opencv), input of the function is the image of the picked object and the image of the placed object. Some threshold parameters are allowed and can be an optional input of the function,for example: threshold of grey scale. 
 2. Do not always use center of mass as the pick position, you should consider the shape of the letter. For example get the contour of the letter and assign higher probability to the area inside the contour area.  
 3. provide only 1 python function with brief explanation, you can not use undefined function in your code
 ```
@@ -315,4 +315,186 @@ Rules:
 1. You can use only python library(numpy, opencv), input of the function is the image of the picked object and the image of the placed object. Some threshold parameters are allowed and can be an optional input of the function,for example: threshold of grey scale. 
 2. The place position is the pixel in the second image, the first image would always center at the placed position. A good place position should be easy to align the picked object with the placed object. 
 3. provide only 1 python function with brief explanation, you can not use undefined function in your code
+```
+
+## prompt for high level
+[task setting]
+You should design a function for high level action planning of table-top manipulation. The input of this function is state of robot and objects. Output is the desired behavior of this robot.
+
+[robot api]
+robot api contains the available actions of robot, you can use them to design your function.
+
+class robot:
+    previous_action = []
+    # previous_action is a list of previous actions of robot
+    def pick(self,obj):
+        # pick up the object, ONLY if the object is on the table and the robot has not picked up an object successfully on last step
+        self.servo(obj.position)
+        success = self.grasp(obj)
+        previous_action.append(["pick",obj,success])
+    def place(self,location):
+        # place the object to the location, ONLY if the robot has picked up an object successfully on last step
+        self.servo(location)
+        success = self.release()# return True if the object is released successfully
+        previous_action.append(["place",location,success])
+    def get_object_in_gripper(self,):
+        # return the object in gripper
+        if self.object_in_gripper:
+            return self.object_in_gripper
+        else:
+            return None
+
+object api contains the information of objects, you can use them to design your function.
+
+class object:
+    position = [x,y]
+    def on(self,object):
+        # return True if this object is on the object
+        if np.linalg.norm(self.position[:2]-object.position[:2]) < 0.05: # distance between object is less than 5cm
+            if self.position[2] > object.position[2]: # height of this object is higher than the object
+                return True
+            else:
+                return False
+        else:
+            return False
+        
+    
+    def in_middle(self,object1,object2):
+        # self defined function
+        # return True if this object is in the middle of object1 and object2
+        center = (object1.position[:2]+object2.position[:2])/2
+        if np.linalg.norm(self.position[:2]-center) < 0.05: # distance between object is less than 5cm
+            return True
+        else:
+            return False
+    # you can define your own function here
+    ....
+
+[template]
+
+def planner(robot,objects):
+    # robot: robot state
+    # objects: list of object state
+    # return: action for robot to execute
+
+    if condition not meet:
+    # self defined condition for robot to detect unwanted situation
+    # check robot.previous_action or object geometry relation
+        if wrong_pick:
+            # place it to somewhere else because robot can only pick 1 object at a time
+            return robot.place(position)
+        elif wrong_place:
+            # pick it up and place it to correct position
+            return robot.pick(object)
+    if some condition meet:
+        # self defined condition for robot to detect wanted situation
+        # for example: for put 3 blocks in a line, if 2 blocks are already in a line, then put the third block in the line
+        do something
+    elif some other condition:
+        do somthing else
+    elif ...
+
+def relation(object1,object2,..):
+    # self defined function to get the relation between objects
+    # for example: for put blocks in a line, you need to know the relation between blocks if one block is in line with of other 2 blocks
+    return True/False
+
+[example]
+for languange command: put all blocks in a line
+
+def find_highest_stack(objects):
+    # Finds the stack of objects with the topmost object
+    # and returns its top object (ignoring the object in the robot's gripper if any)
+    highest_stack_top = None
+    highest_height = -np.inf
+    
+    for obj in objects:
+        if obj.position[2] > highest_height and not any(other_obj.on(obj) for other_obj in objects):
+            highest_stack_top = obj
+            highest_height = obj.position[2]
+    
+    return highest_stack_top
+def find_highest_nonstacked_block(objects, robot,stack_top):
+    # Finds the highest block that is not stacked and not currently in the robot's gripper
+    gripped_object = robot.get_object_in_gripper()
+    nonstacked_blocks = [obj for obj in objects if not stack_top.on(obj) ]
+
+    highest_nonstacked_block = None
+    highest_nonstacked_height = -np.inf
+
+    for obj in nonstacked_blocks:
+        if obj.position[2] > highest_nonstacked_height and not any(other_obj.on(obj) for other_obj in nonstacked_blocks):
+            highest_nonstacked_block = obj
+            highest_nonstacked_height = obj.position[2]
+
+    return highest_nonstacked_block
+
+def planner(robot, objects):
+    stack_base = find_highest_stack(objects)
+    
+    # Find the block to move next (the highest one that is not part of the stack)
+    block_to_move = find_highest_nonstacked_block(objects, robot,stack_base)
+    
+    # If the robot is already holding the correct block, place it onto the stack base
+    if robot.get_object_in_gripper() == block_to_move:
+        robot.place(stack_base.position)
+    else:
+        # If the robot isn't holding the correct block, pick the correct block
+        robot.pick(block_to_move)
+[command] put {obj} on {bowl} {obj} is from[letter L,letter V,letter O] {bowl} is from[blue bowl,green bowl,yellow bowl]
+[command] put {objects} on different {corners} 
+{obj} is from[letter L,letter V,letter O] 
+corners is the corner of the table including[left up,left down,right up,right down] 
+
+###[command] put {obj} on {bowl} {obj} is from[letter L,letter V,letter O] {bowl} is from[blue bowl,green bowl,yellow bowl]
+```python
+
+import numpy as np
+
+def find_object_by_description(objects, description):
+    # Helper function to find an object based on its description, such as 'letter L'.
+    # This assumes that there is a way to determine each object's description, which is not outlined in the API.
+    # The details of this implementation are not provided as they depend on how the descriptions are assigned to objects.
+    for obj in objects:
+        if obj.description == description:
+            return obj
+    return None
+
+def planner(robot, objects, obj_desc, bowl_desc):
+    # robot: robot state
+    # objects: list of object state
+    # obj_desc: description of the object to place, for example, 'letter L'
+    # bowl_desc: description of the bowl, for example, 'blue bowl'
+    # return: action for robot to execute
+
+    # Find the specified object and bowl based on their descriptions
+    obj_to_place = find_object_by_description(objects, obj_desc)
+    target_bowl = find_object_by_description(objects, bowl_desc)
+
+    if obj_to_place is None or target_bowl is None:
+        # If either the object or the bowl cannot be found, return an error or a null action
+        return None
+    
+    # Check if the object is already in the correct bowl
+    if obj_to_place.on(target_bowl):
+        # The object is already in place, no action needed
+        return None
+    else:
+        # If the robot's gripper is not empty, release the current object
+        if robot.get_object_in_gripper() is not None and robot.get_object_in_gripper() != obj_to_place:
+            robot.place(some_safe_location)  # some_safe_location needs to be defined
+            return
+    
+        # If the robot's gripper is empty or has the wrong object
+        if robot.get_object_in_gripper() is None or robot.get_object_in_gripper() != obj_to_place:
+            # Pick the specified object
+                robot.pick(obj_to_place)
+        # If the robot is now holding the correct object, place it in the bowl
+        if robot.get_object_in_gripper() == obj_to_place:
+                robot.place(target_bowl.position)
+```
+[command] put {objects} on different {corners} 
+{obj} is from[letter L,letter V,letter O] 
+corners is the corner of the table including[left up,left down,right up,right down] 
+```python
 ```
