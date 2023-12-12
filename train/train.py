@@ -21,6 +21,7 @@ def str2bool(v):
         return False
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
+
 from stable_baselines3 import SAC,PPO,TD3,DDPG,A2C,ppo
 from stable_baselines3.common.callbacks import CheckpointCallback
 def train():
@@ -32,6 +33,7 @@ def train():
     parser.add_argument('--save', type=str2bool, default=True, help='Whether to save the model.')
     parser.add_argument('--render', type=str2bool, default=False, help='Whether to render the environment.')
     parser.add_argument('--save_freq', type=int, default=2500, help='save frequency')
+    parser.add_argument('--device', type=int, default=0, help='device')
 
     # Parse arguments
     args = parser.parse_args()
@@ -41,6 +43,11 @@ def train():
     save = args.save
     iters = args.iters
     save_freq = args.save_freq
+    device = args.device
+    if device == 0:
+        device = "cuda"
+    else:
+        device = "cpu"
     print("render: ",render)
 
 
@@ -91,6 +98,7 @@ def train():
             gamma=0.9,
             epsilon_llm=ep,
             tensorboard_log="tmp/final_tb/",
+            device=device
         )
     else:
         model= LLMSAC(

@@ -29,3 +29,17 @@ module load miniconda/3.9
 ```bash
 sinteractive --cpus-per-task=2 --mem=5000mb ###Request for resource.
 ```
+### submit job
+```bash
+sbatch train.sbatch
+```
+
+## Current jobid
+- 9157558
+
+
+## Other commands
+### show all jobs
+- squeue -u NetID
+### show efficiency
+- seff jobid
