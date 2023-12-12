@@ -11,31 +11,54 @@ import numpy as np
 import torch
 import matplotlib.pyplot as plt
 from tasks.letter import PutLetterOontheBowl,PutLetterontheBowl,PutblockonBowlSameColor
-
-
+import argparse
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
 from stable_baselines3 import SAC,PPO,TD3,DDPG,A2C,ppo
 from stable_baselines3.common.callbacks import CheckpointCallback
 def train():
-    seed = 2
+    parser = argparse.ArgumentParser(description='Training script.')
+
+    # Add arguments
+    parser.add_argument('--seed', type=int, default=4, help='Random seed.')
+    parser.add_argument('--iters', type=int, default=80000, help='Number of iterations.')
+    parser.add_argument('--save', type=str2bool, default=True, help='Whether to save the model.')
+    parser.add_argument('--render', type=str2bool, default=False, help='Whether to render the environment.')
+    parser.add_argument('--save_freq', type=int, default=2500, help='save frequency')
+
+    # Parse arguments
+    args = parser.parse_args()
+    seed = args.seed
     set_random_seed(seed,using_cuda=True)
-    render = False
-    args = sys.argv
-    if len(args) > 1:
-        if args[1] == "render":
-            render = True
+    render = args.render
+    save = args.save
+    iters = args.iters
+    save_freq = args.save_freq
+    print("render: ",render)
+
+
+
     policy_name = "llmsac_imgatten_withnoise"
     task_name = "PutLetterontheBowl"
     # task_name = "PutblockonBowlSameColor"
     ep = (0.15,"fixed")
     # ep = (1,"fixed")
     name =policy_name+"_"+task_name+"seed"+str(seed)+"_model"
-    checkpoint_callback = CheckpointCallback(
-    save_freq=5000,
-    save_path="tmp/"+ name +"/",
-    name_prefix="rl_model",
-    save_replay_buffer=False,
-    save_vecnormalize=True,
-    )
+    if save:
+        checkpoint_callback = CheckpointCallback(
+        save_freq=save_freq,
+        save_path="tmp/"+ name +"/",
+        name_prefix="rl_model",
+        save_replay_buffer=False,
+        save_vecnormalize=True,
+        )
 
     env = ResPickOrPlaceEnvWithoutLangReward(
         task= PutLetterontheBowl,
@@ -57,20 +80,30 @@ def train():
     print(env.observation_space)
     print(env.action_space)
 
-    model= LLMSAC(
-        "MultiInputPolicy",
-        env,
-        policy_kwargs=policy_kwargs,
-        learning_starts= 100,
-        learning_rate=0.5*3e-4,
-        buffer_size= 80000,
-        # gradient_steps = 2,
-        # batch_size= 512,
-        gamma=0.9,
-        epsilon_llm=ep,
-        tensorboard_log="tmp/final_tb/",
-    )
+    if save:
+        model= LLMSAC(
+            "MultiInputPolicy",
+            env,
+            policy_kwargs=policy_kwargs,
+            learning_starts= 100,
+            learning_rate=0.5*3e-4,
+            buffer_size= iters,
+            gamma=0.9,
+            epsilon_llm=ep,
+            tensorboard_log="tmp/final_tb/",
+        )
+    else:
+        model= LLMSAC(
+            "MultiInputPolicy",
+            env,
+            policy_kwargs=policy_kwargs,
+            learning_starts= 100,
+            learning_rate=0.5*3e-4,
+            buffer_size= iters,
+            gamma=0.9,
+            epsilon_llm=ep,
+        )
 
-    model.learn(total_timesteps=80000,callback=checkpoint_callback,tb_log_name= name)
+    model.learn(total_timesteps=iters,callback=checkpoint_callback,tb_log_name= name)
 if __name__ == "__main__":
     train()
