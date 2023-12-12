@@ -132,7 +132,7 @@ class LLMSAC(SAC):
     def expert_explore(self,env):
         action = env.env_method("get_expert_demonstration")
         action = np.array(action)
-        print("*******************llm action",action)
+        # print("*******************llm action",action)
         return action
     def train(self, gradient_steps: int, batch_size: int = 64) -> None:
         # Switch to train mode (this affects batch norm / dropout)

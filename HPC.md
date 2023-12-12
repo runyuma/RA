@@ -1,4 +1,10 @@
-##
+## resources
+- https://wiki.tudelft.nl/bin/view/Research/InsyCluster/ConnectingSSH
+- https://docs.google.com/presentation/d/10A0_0eNRBYd87E1h1YN6bsIFaZaua5qJkfBbnBKAr6o/present?slide=id.g13d50e386b_2_2 
+- https://login.hpc.tudelft.nl/
+- https://teams.microsoft.com/_#/apps/3e0a4fec-499b-4138-8e7c-71a9d88a62ed/sections/MyNotebook
+- https://www.notion.so/HPC-start-980c577864c34f3a94591259df0520a7
+
 ### login to bastion
 ```bash
 ssh runyuma@student-linux.tudelft.nl
