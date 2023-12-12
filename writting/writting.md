@@ -32,4 +32,33 @@ Abstract
 Introduction
 Method
 Experiment
+## related works 
+1. LLM high level planning
+- Language models as zero-shot planners: Extracting actionable knowledge for embodied agents.
+- Large language models are zero-shot reasoners
+2.LLM high level planning for robotics
+- Do as i can and not as i say: Grounding language in robotic affordances
+- Inner Monologue: Embodied Reasoning through Planning with Language Models
+- PROGPROMPT: Generating Situated Robot Task Plans using Large Language Models
+- Code as Policies: Language Model Programs for Embodied Controler
+
+
+3. VLM and LLM for robotics
+- VLM CLIP,CLIPort
+- Socratic Model: Vision-Language Model for Robot Instruction Following
+- VoxPoser: Towards Making 3D Human Pose Estimation and Tracking More Accessible with Transformers
+foundation model and reinforcement learning
+(designing reward functions often also depends on common-sense reasoning and extensive world knowledge)
+1. Reward Design with Language Models 
+- REWARD DESIGN WITH LANGUAGE MODELS (LLM a proxy reward function)
+- Language to Rewards for Robotic Skill Synthesis (connect commen sense reasoning with low level action)
+- EUREKA: HUMAN-LEVEL REWARD DESIGN VIA CODING LARGE LANGUAGE MODELS (evolutionary optimization over reward code to enable complex tasks such as dexerous manipulation)
+- Self-Refined Large Language Model as Automated Reward Function Designer for Deep Reinforcement Learning in Robotics(self-refined LLM as reward function designer)
+2. LLM guiding exploration
+- Guiding Pretraining in Reinforcement Learning with Large Language Models(agents toward human-meaningful and plausibly useful behaviors without requiring a human in the loop)
+- Intrinsic Language-Guided Exploration for Complex Long-Horizon Robotic Manipulation Tasks(using intrinsic reward provided by LLM to guide exploration for long horizon tasks)
+
+a primary limitation of LLMs is that their outputs can occasionally be inaccurate
+- Grounding Large Language Models in Interactive Environments with Online Reinforcement Learning
+
 

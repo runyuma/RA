@@ -14,7 +14,7 @@ class VILD():
     def __init__(self,device="cuda"):
         # init clip model
         self.clip_model, self.clip_preprocess = clip.load("ViT-B/32")
-        self.clip_model.to(device).eval()   
+        self.clip_model.to("cuda").eval()   
         # self.clip_model.cuda().eval()
         # init vild model
         # gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.1)

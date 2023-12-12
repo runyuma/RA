@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 
-def generate_pick_probability_map(img, threshold=100):
+def generate_pick_probability_map(img, threshold=100,deterministic = False):
     # Load the image in grayscale
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     
@@ -25,7 +25,10 @@ def generate_pick_probability_map(img, threshold=100):
             
             # If the pixel is inside the contour, update the probability map
             if dist > 0:
-                prob_map[y, x] = np.clip(dist,0,3)
+                if not deterministic:
+                    prob_map[y, x] = np.clip(dist,0,3)
+                else:
+                    prob_map[y, x] = dist
                 # prob_map[y, x] = dist
     
     # Normalize the probability map

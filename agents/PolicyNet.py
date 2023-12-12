@@ -70,6 +70,7 @@ class FeatureExtractor(BaseFeaturesExtractor):
 
     def forward(self,observation)-> torch.Tensor:
         print("**************forward**************")
+        
         pos = observation['image']
         obj_inhand = observation['object_in_hand']
         lang_goal = observation['lang_goal']
@@ -106,7 +107,11 @@ class AttentionFeatureExtractor(BaseFeaturesExtractor):
         self.fc1 = nn.Sequential(
             nn.Linear(extract_size, extract_size),
             nn.ReLU())
-        self.token_size = extract_size+2+observation_space['object_in_hand'].shape[0]+observation_space['lang_goal'].shape[0]+1
+
+        if 'lang_goal' in observation_space.keys():
+            self.token_size = extract_size+2+observation_space['object_in_hand'].shape[0]+observation_space['lang_goal'].shape[0]+1
+        else:
+            self.token_size = extract_size+2+observation_space['object_in_hand'].shape[0]+1
         self.obj_num = observation_space['rgbd'].shape[0]
         self.atten = AttentionLayer(self.token_size, 1)
         self.fc2 = nn.Sequential(
@@ -118,9 +123,10 @@ class AttentionFeatureExtractor(BaseFeaturesExtractor):
 
         
     def forward(self,observation)-> torch.Tensor:
+        # print(observation['image'].shape)
         pos = observation['image']
         obj_inhand = observation['object_in_hand']
-        lang_goal = observation['lang_goal']
+        
         image = observation['rgbd']
 
         if len(image.shape) == 4:
@@ -143,15 +149,88 @@ class AttentionFeatureExtractor(BaseFeaturesExtractor):
         out = torch.cat((image,pos),dim=2)
 
         obj_inhand = obj_inhand.unsqueeze(1).repeat_interleave(N, dim=1)
-        lang_goal = lang_goal.unsqueeze(1).repeat_interleave(N, dim=1)
-        position = torch.arange(N).unsqueeze(0).repeat_interleave(B, dim=0).unsqueeze(2).to(obj_inhand.device)
-        out = torch.cat((out,obj_inhand,lang_goal,position),dim=2)
+        if 'lang_goal' in observation.keys():
+            lang_goal = observation['lang_goal']
+            lang_goal = lang_goal.unsqueeze(1).repeat_interleave(N, dim=1)
+            position = torch.arange(N).unsqueeze(0).repeat_interleave(B, dim=0).unsqueeze(2).to(obj_inhand.device)
+            out = torch.cat((out,obj_inhand,lang_goal,position),dim=2)
+        else:
+            position = torch.arange(N).unsqueeze(0).repeat_interleave(B, dim=0).unsqueeze(2).to(obj_inhand.device)
+            out = torch.cat((out,obj_inhand,position),dim=2)
         out = self.atten(out,out,out)
         out = out.reshape(B,-1)
         out = self.fc2(out)
         out = self.fc3(out)
 
         return out
+# class AttentionFeatureExtractor(BaseFeaturesExtractor):
+#     def __init__(self, observation_space: spaces.Dict,features_dim: int = 32, extract_size = 12):
+#         super().__init__(observation_space, features_dim)
+#         self.layer1 = nn.Sequential(
+#             nn.Conv2d(4, 6, kernel_size=5, stride=1, padding=0),
+#             nn.BatchNorm2d(6),
+#             nn.ReLU(),
+#             nn.MaxPool2d(kernel_size = 2, stride = 2))
+#         self.layer2 = nn.Sequential(
+#             nn.Conv2d(6, 6, kernel_size=3, stride=1, padding=1),
+#             nn.BatchNorm2d(6),
+#             nn.ReLU(),
+#             nn.MaxPool2d(kernel_size = 2, stride = 2))
+#         self.fc1 = nn.Sequential(
+#             nn.Linear(6*6*6, 6*4*2),
+#             nn.ReLU())
+#         self.fc2 = nn.Sequential(
+#             nn.Linear(6*4*2, extract_size),
+#             nn.ReLU())
+#         # self.fc3 = nn.Sequential(
+#         #     nn.Linear(extract_size*4, extract_size*1),
+#         #     nn.ReLU())
+#         self.token_size = extract_size+2+observation_space['object_in_hand'].shape[0]+observation_space['lang_goal'].shape[0]+1
+#         self.obj_num = observation_space['rgbd'].shape[0]
+#         self.atten = AttentionLayer(self.token_size, 1)
+        
+#         self.fc4 = nn.Sequential(
+#             nn.Linear(self.token_size*self.obj_num, features_dim),
+#             nn.ReLU())
+
+        
+#     def forward(self,observation)-> torch.Tensor:
+#         # print(observation['image'].shape)
+#         pos = observation['image']
+#         obj_inhand = observation['object_in_hand']
+#         lang_goal = observation['lang_goal']
+#         image = observation['rgbd']
+
+#         if len(image.shape) == 4:
+#             # Add a dummy batch dimension
+#             image = image.unsqueeze(0)
+#             obj_inhand = obj_inhand.unsqueeze(0)
+#             lang_goal = lang_goal.unsqueeze(0)
+#             pos = pos.unsqueeze(0)
+        
+#         image = image.permute(0, 1, 4, 2, 3)
+#         B, N, C, H, W = image.shape
+#         image = image.reshape(B * N, C, H, W)
+#         image = self.layer1(image)
+#         image = self.layer2(image)
+#         image = image.reshape(B * N, -1)
+#         image = self.fc1(image)
+#         image = self.fc2(image)
+#         # image = self.fc3(image)
+#         image = image.reshape(B, N, -1)
+
+#         pos = pos.reshape(B, N, -1)
+#         out = torch.cat((image,pos),dim=2)
+
+#         obj_inhand = obj_inhand.unsqueeze(1).repeat_interleave(N, dim=1)
+#         lang_goal = lang_goal.unsqueeze(1).repeat_interleave(N, dim=1)
+#         position = torch.arange(N).unsqueeze(0).repeat_interleave(B, dim=0).unsqueeze(2).to(obj_inhand.device)
+#         out = torch.cat((out,obj_inhand,lang_goal,position),dim=2)
+#         out = self.atten(out,out,out)
+#         out = out.reshape(B,-1)
+#         out = self.fc4(out)
+
+#         return out
 
 
  

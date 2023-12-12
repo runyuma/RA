@@ -68,12 +68,19 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
             else:
                 h = int(self.residual_region*2)
                 w = int(self.residual_region*2)
-                self.observation_space = spaces.Dict({
-                        "rgbd": spaces.Box(0, 1, (obj_num,h,w,4), dtype=np.float32),
-                        "image": spaces.Box(0, 1, (obj_num*2,), dtype=np.float32),
-                        "lang_goal": spaces.Box(0, obj_num, (goal_num,), dtype=np.int32),
-                        "object_in_hand": spaces.Box(0, 1, (1,), dtype=np.bool8),
-                    })
+                if goal_num > 0:
+                    self.observation_space = spaces.Dict({
+                            "rgbd": spaces.Box(0, 1, (obj_num,h,w,4), dtype=np.float32),
+                            "image": spaces.Box(0, 1, (obj_num*2,), dtype=np.float32),
+                            "lang_goal": spaces.Box(0, obj_num, (goal_num,), dtype=np.int32) ,
+                            "object_in_hand": spaces.Box(0, 1, (1,), dtype=np.bool8),
+                        })
+                else:
+                    self.observation_space = spaces.Dict({
+                            "rgbd": spaces.Box(0, 1, (obj_num,h,w,4), dtype=np.float32),
+                            "image": spaces.Box(0, 1, (obj_num*2,), dtype=np.float32),
+                            "object_in_hand": spaces.Box(0, 1, (1,), dtype=np.bool8),
+                        })
         else:
             if not scale_obs:
                 self.observation_space = spaces.Dict({
@@ -118,7 +125,7 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
         self.max_steps = 10 # task.max_steps
 
 
-    def reset(self,seed = None):
+    def reset(self,seed = None,pos_list = None):
         self.last_pick_success = 0
         self.info = {
             "step_result":['initialization'],
@@ -166,7 +173,7 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
 
     def step(self, action=None):
         start_time = time.time()
-        print("lang goal",self.lang_goal)
+        # print("lang goal",self.lang_goal)
 
         """Do pick and place motion primitive."""
         height = self.depth
@@ -183,7 +190,8 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
                 STEP_SIM = self.task.p_neglect(pix,self.obj_name_to_id,self.pos_list)
             
         if not STEP_SIM:
-            print("@@@@@@@@@@@@action out of meaningless")
+            pass
+            # print("@@@@@@@@@@@@action out of meaningless")
 
         STEP_SIM = STEP_SIM or (not self.neglect_steps)
         if STEP_SIM :
@@ -193,7 +201,7 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
         # position of objects
                
         obs_start_time = time.time()
-        reward,done = self.get_reward(self.observation,action)
+        reward,done = self.get_reward(self.observation,pick_success,action)
         if STEP_SIM:
             observation = self.get_observation(pick_success,action)
             self.observation = observation
@@ -204,9 +212,9 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
         # position of reward function
         
         self.step_count += 1
-        print("action ",raw_action,"real action",action)
-        print("reward",reward,"done: ",done)
-        print("observation:",observation["image"], observation["object_in_hand"])
+        # print("action ",raw_action,"real action",action)
+        # print("reward",reward,"done: ",done)
+        # print("observation:",observation["image"], observation["object_in_hand"])
         info = self.get_info()
         return observation, reward, done,False, info
     
@@ -224,7 +232,7 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
             # print(pick_pix,height, BOUNDS,PIXEL_SIZE)
             pick_xyz = pix_to_xyz(pick_pix,height, BOUNDS,PIXEL_SIZE,pick=True,ee = self.ee_type)
             hover_xyz = pick_xyz.copy() + np.float32([0, 0, 0.2])
-            print("steping pick: ", pick_xyz)
+            # print("steping pick: ", pick_xyz)
 
             moving_time = 0
             while np.linalg.norm(hover_xyz - ee_xyz) > 0.01:
@@ -233,7 +241,7 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
                 self.step_sim_and_render()
                 ee_xyz = np.float32(pybullet.getLinkState(self.robot_id, self.tip_link_id)[0])
                 if moving_time > max_time:
-                    print("moving time out")
+                    # print("moving time out")
                     break
 
             moving_time = 0
@@ -243,8 +251,13 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
                 self.step_sim_and_render()
                 ee_xyz = np.float32(pybullet.getLinkState(self.robot_id, self.tip_link_id)[0])
                 if moving_time > max_time:
-                    print("moving time out")
+                    # print("moving time out")
                     break
+                if np.linalg.norm(pick_xyz - ee_xyz) < 0.1:
+                    contact = self.gripper.detect_contact()
+                    # print("contact",contact)
+                    if contact:      
+                        break
 
             # Pick up object.
             if self.ee_type == "suction":
@@ -269,11 +282,11 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
                 self.step_sim_and_render()
                 ee_xyz = np.float32(pybullet.getLinkState(self.robot_id, self.tip_link_id)[0])
                 if moving_time > max_time:
-                    print("moving time out")
+                    # print("moving time out")
                     break
             pick_success = int(self.gripper.check_grasp())
             
-            print("pick_success",pick_success)
+            # print("pick_success",pick_success)
             return pick_success
 
 
@@ -283,7 +296,7 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
             place_pix = place_pix.astype(np.int32)
             place_pix = np.clip(place_pix,[0,0],[self.image_size[0]-1,self.image_size[1]-1])
             place_xyz = pix_to_xyz(place_pix,height, BOUNDS,PIXEL_SIZE,pick=False,ee = self.ee_type)
-            print("steping: place",  place_xyz)
+            # print("steping: place",  place_xyz)
 
             # Move to place location.
             moving_time = 0
@@ -293,12 +306,12 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
                 self.step_sim_and_render()
                 ee_xyz = np.float32(pybullet.getLinkState(self.robot_id, self.tip_link_id)[0])
                 if moving_time>max_time:
-                    print("moving time out")
+                    # print("moving time out")
                     break
 
             # Place down object.
             moving_time = 0
-            print("place_xyz[2]",place_xyz[2],self.gripper.detect_contact())
+            # print("place_xyz[2]",place_xyz[2],self.gripper.detect_contact())
             while (self.gripper.detect_contact()) and (place_xyz[2] > 0.03):
                 
                 moving_time+= self.dt
@@ -307,7 +320,7 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
                 for _ in range(3):
                     self.step_sim_and_render()
                 if moving_time>max_time:
-                    print("moving time out")
+                    # print("moving time out")
                     break
             
             for _ in range(240):
@@ -321,7 +334,7 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
                 self.step_sim_and_render()
                 ee_xyz = np.float32(pybullet.getLinkState(self.robot_id, self.tip_link_id)[0])
                 if moving_time > max_time:
-                    print("moving time out")
+                    # print("moving time out")
                     break
 
             place_xyz = np.float32([0, -0.2, 0.4])
@@ -364,7 +377,7 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
                 if pick_success:
                     if self.obj_pos[key][2]>0.2:
                         picked_obj = idx
-                        print("picked_obj",picked_obj)
+                        # print("picked_obj",picked_obj)
                 _pos = xyz_to_pix(self.obj_pos[key],BOUNDS,PIXEL_SIZE)
                 previous_pos = last_pos[2*idx:2*idx+2]
                 if np.linalg.norm(np.array(_pos) - np.array(previous_pos)) > 5:
@@ -409,10 +422,11 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
                     
                 else:
                     obs["rgbd"] = self.observation["rgbd"]
+                    # for idx,key in enumerate(keys):
                     for idx in changed_idxs:
                         if picked_obj == idx and action is not None:
                             pos = action[1:]
-                            print(int(pos[0]//2), int(pos[1]//2))
+                            # print(int(pos[0]//2), int(pos[1]//2))
                             half_size = self.residual_region
                             patch = extract_sub_image_with_padding(self.last_rgbd, int(pos[0]//2), int(pos[1]//2), half_size*2, half_size*2)
                             obs["rgbd"][idx] = patch
@@ -433,15 +447,15 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
             obs["image"] = np.array(pos_list)/self.image_size[0]        
         return obs
     
-    def get_reward(self,observation,action):
-        reward,done = self.task.reward(observation,action,self,BOUNDS,PIXEL_SIZE,xyz_to_pix)
+    def get_reward(self,observation,pick_success,action):
+        reward,done = self.task.reward(observation,pick_success,action,self,BOUNDS,PIXEL_SIZE,xyz_to_pix)
         return reward,done
 
 
     def reset_reward(self, obs):
         return 0,False
-    def get_expert_demonstration(self):
-        desired_action = self.task.exploration_action(self)
+    def get_expert_demonstration(self,deterministic=False):
+        desired_action = self.task.exploration_action(self,deterministic=deterministic)
         if not self.residual:
             pri = desired_action[0]
             idx = desired_action[1:-2]

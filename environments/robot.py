@@ -3,6 +3,7 @@ import pybullet_data
 import numpy as np
 import threading
 import time
+import cv2
 class Robotiq2F85:
   """Gripper handling for Robotiq 2F85."""
 
@@ -215,13 +216,29 @@ class Suction():
               hl =  np.clip(action_h - 3,0,h)
               wh =  np.clip(action_w + 3,0,w)
               wl =  np.clip(action_w - 3,0,w)
+
+              depth = cv2.GaussianBlur(depth, (3, 3), 0)
               dp_map = depth[hl:hh,wl:wh]
-              dp_map = (dp_map>0.005)
+              
+              # import matplotlib
+              # matplotlib.use('TKAgg')
+              # import matplotlib.pyplot as plt
+              # plt.subplot(1,2,1)
+              # plt.imshow(dp_map)
+              # plt.subplot(1,2,2)
+              # plt.imshow(depth)
+              # plt.scatter(action_w,action_h,c='r')
+              # plt.show()
+
+
+              dp_map = (dp_map>0.010)
               # print("dp_map:",dp_map)
-              occupied = np.sum(dp_map)/(dp_map.shape[0]*dp_map.shape[1])
+              occupied1 = np.sum(dp_map)/(dp_map.shape[0]*dp_map.shape[1])
+              dp_map2 = dp_map[1:-1,1:-1]
+              occupied2 = np.sum(dp_map2)/(dp_map2.shape[0]*dp_map2.shape[1])
               # print("depth:",dp_map)
               # print("occupied:",occupied)
-              if occupied>0.5:
+              if occupied1>0.75 or occupied2>0.75:
                 # Handle contact between suction with a rigid object.
                 for point in points:
                     obj_id, contact_link = point[2], point[4]

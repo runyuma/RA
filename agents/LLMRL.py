@@ -149,6 +149,7 @@ class LLMSAC(SAC):
         actor_losses, critic_losses = [], []
 
         for gradient_step in range(gradient_steps):
+            # print("gradient_steps: ", gradient_steps)
             # Sample replay buffer
             replay_data = self.replay_buffer.sample(batch_size, env=self._vec_normalize_env)  # type: ignore[union-attr]
         

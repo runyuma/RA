@@ -7,14 +7,15 @@ import numpy as np
 
 # import matplotlib.pyplot as plt
 from environments.utils import mouse_demo
-from tasks.letter import PutLetterOontheBowl,PutLetterontheBowl
+from tasks.letter import PutLetterOontheBowl,PutLetterontheBowl,PutblockonBowlSameColor
 import cv2
 import matplotlib
 matplotlib.use('TKAgg')
 import matplotlib.pyplot as plt
-
+task = PutLetterontheBowl
+task = PutblockonBowlSameColor
 env = ResPickOrPlaceEnvWithoutLangReward(
-                                        task= PutLetterontheBowl,
+                                        task= task,
                                          image_obs=True,
                                          residual=True,
                                          observation_noise=5,
@@ -85,7 +86,7 @@ while True:
         print("expert demonstration:",act)
     obs, reward, done,_, info = env.step(act)
     if done:
-        break
+        obs,_ = env.reset()
     print("#################goal:",obs["lang_goal"])
     print("reward:",reward)
     print("info:",info)

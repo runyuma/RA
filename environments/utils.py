@@ -19,7 +19,7 @@ def pix_to_xyz(pixel, height, bounds, pixel_size, skip_height=False,pick = True,
             else:
                 z = bounds[2, 0] + height[u, v] + 0.07
             z = np.clip(z,0.005,0.20)
-            z = z - 0.065*0.9# offset
+            z = z - 0.065# offset
     else:
         z = 0.0
     return [x, y, z]
