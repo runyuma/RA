@@ -1,9 +1,9 @@
 #!/bin/sh
 
 #SBATCH --partition=general
-#SBATCH --qos=short
+#SBATCH --qos=medium
 #SBATCH --ntasks=1
-#SBATCH --time=4:00:00
+#SBATCH --time=16:00:00
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:1
 #SBATCH --mem=16000
