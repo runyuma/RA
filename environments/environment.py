@@ -92,7 +92,7 @@ class PickPlaceEnv(gym.Env):
       for key in self.obj_name_to_id.keys():
         if key in self.task.config['pick']:
           obj_ids.append(self.obj_name_to_id[key])
-      print("obj_ids",obj_ids)  
+      # print("obj_ids",obj_ids)  
       self.gripper.set_objid(obj_ids)
 
     # arm init position
@@ -119,7 +119,7 @@ class PickPlaceEnv(gym.Env):
     self.reset_reward(obs)
     # self.obj_pos = self.get_object_position()
     
-    print("lang goal",self.lang_goal)
+    # print("lang goal",self.lang_goal)
     self.step_count = 0
     return obs,{}
   
@@ -150,7 +150,7 @@ class PickPlaceEnv(gym.Env):
     self.servoj(joints,gains_factor)
 
   def step(self, action=None):
-    print("lang goal",self.lang_goal)
+    # print("lang goal",self.lang_goal)
     """Do pick and place motion primitive."""
     pick_pix, place_pix = action["pick"].copy(), action["place"].copy()
     

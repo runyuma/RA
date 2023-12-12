@@ -208,7 +208,7 @@ class Suction():
             points = pybullet.getContactPoints(bodyA=self.body, linkIndexA=0)
             # print(points)
             if points:
-              print("action:",action)
+              # print("action:",action)
               h,w = depth.shape
               action_h= int(action[1])
               action_w = int(action[2])
