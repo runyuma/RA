@@ -18,4 +18,4 @@ module load cuda/11.2 cudnn/11.2-8.1.1.33
 conda activate ra
 
 cd /tudelft.net/staff-umbrella/rarma/src/RA/
-srun python train/train.py --render f --save t --seed 4 --iters 80000 --save_freq 2500 --device 1
+srun python train/train.py --render f --save t --seed 4 --iters 80000 --save_freq 2500 --device 0
