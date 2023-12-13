@@ -36,6 +36,7 @@ sbatch train.sbatch
 
 ## Current jobid
 - 9157559
+- 9157701
 
 
 ## Other commands
@@ -43,3 +44,8 @@ sbatch train.sbatch
 - squeue -u NetID
 ### show efficiency
 - seff jobid
+
+## copy to local
+```bash
+scp -p -r runyuma@student-linux.tudelft.nl:/tudelft.net/staff-umbrella/rarma/src/RA/tmp/final_tb /home/marunyu
+```
