@@ -94,7 +94,7 @@ def train():
             "MultiInputPolicy",
             env,
             policy_kwargs=policy_kwargs,
-            learning_starts= 100,
+            learning_starts= 100*0,
             learning_rate=0.5*3e-4,
             buffer_size= iters,
             gamma=0.9,
