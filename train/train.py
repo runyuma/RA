@@ -34,6 +34,7 @@ def train():
     parser.add_argument('--render', type=str2bool, default=False, help='Whether to render the environment.')
     parser.add_argument('--save_freq', type=int, default=2500, help='save frequency')
     parser.add_argument('--device', type=int, default=0, help='device')
+    parser.add_argument('--ep', type=float, default=0.15, help='ep')
 
     # Parse arguments
     args = parser.parse_args()
@@ -55,9 +56,9 @@ def train():
     policy_name = "llmsac_imgatten_withnoise"
     task_name = "PutLetterontheBowl"
     # task_name = "PutblockonBowlSameColor"
-    ep = (0.15,"fixed")
+    ep = (args.ep,"fixed")
     # ep = (1,"fixed")
-    name =policy_name+"_"+task_name+"seed"+str(seed)+"_model"
+    name =policy_name+"_"+task_name+"ep"+str(ep[0])+"seed"+str(seed)+"_model"
     if save:
         checkpoint_callback = CheckpointCallback(
         save_freq=save_freq,
@@ -94,7 +95,7 @@ def train():
             "MultiInputPolicy",
             env,
             policy_kwargs=policy_kwargs,
-            learning_starts= 100*0,
+            learning_starts= 100,
             learning_rate=0.5*3e-4,
             buffer_size= iters,
             gamma=0.9,
