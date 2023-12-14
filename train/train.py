@@ -66,6 +66,8 @@ def train():
         save_replay_buffer=False,
         save_vecnormalize=True,
         )
+    else:
+        checkpoint_callback = None
 
     env = ResPickOrPlaceEnvWithoutLangReward(
         task= PutLetterontheBowl,

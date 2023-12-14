@@ -138,6 +138,19 @@ class ResPickOrPlaceEnvWithoutLangReward(PickPlaceEnv):
         obs,info = super().reset()
         self.observation = obs
         return obs,info
+    def reset_withpos(self,seed = None,pos_list = None):
+        self.last_pick_success = 0
+        self.info = {
+            "step_result":['initialization'],
+            "LLM_recommendation":[],
+            "obj_position":[],
+        }
+        # get observation && ground truth position
+        self.observation = None
+        self.last_rgbd = None
+        obs,info = super().reset_with_pos(pos_list)
+        self.observation = obs
+        return obs,info
     
     def translate_action(self,action,observation):
         # translate action to real action [primitive,position in pixel ]

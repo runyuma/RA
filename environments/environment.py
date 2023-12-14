@@ -122,6 +122,83 @@ class PickPlaceEnv(gym.Env):
     # print("lang goal",self.lang_goal)
     self.step_count = 0
     return obs,{}
+  def reset_with_pos(self,pos_list):
+    pybullet.resetSimulation(pybullet.RESET_USE_DEFORMABLE_WORLD)
+    pybullet.setGravity(0, 0, -9.8)
+    self.cache_video = []
+
+    # Temporarily disable rendering to load URDFs faster.
+    pybullet.configureDebugVisualizer(pybullet.COV_ENABLE_RENDERING, 0)
+
+    # Add robot.
+    pybullet.loadURDF("plane.urdf", [0, 0, -0.001])
+    self.robot_id = pybullet.loadURDF("environments/ur5e/ur5e.urdf", [0, 0, 0], flags=pybullet.URDF_USE_MATERIAL_COLORS_FROM_MTL)
+    self.ghost_id = pybullet.loadURDF("environments/ur5e/ur5e.urdf", [0, 0, -10])  # For forward kinematics.
+    self.joint_ids = [pybullet.getJointInfo(self.robot_id, i) for i in range(pybullet.getNumJoints(self.robot_id))]
+    self.joint_ids = [j[0] for j in self.joint_ids if j[2] == pybullet.JOINT_REVOLUTE]
+
+    # Move robot to home configuration.
+    for i in range(len(self.joint_ids)):
+      pybullet.resetJointState(self.robot_id, self.joint_ids[i], self.home_joints[i])
+
+    # Add gripper.
+    if self.ee_type == "gripper":
+      if self.gripper is not None:
+        while self.gripper.constraints_thread.is_alive():
+          self.constraints_thread_active = False
+      self.gripper = Robotiq2F85(self.robot_id, self.ee_link_id)
+      self.gripper.release()
+    elif self.ee_type == "suction":
+      if self.gripper is not None:
+        while self.gripper.constraints_thread.is_alive():
+          self.constraints_thread_active = False
+      self.gripper = Suction(self.robot_id, self.ee_link_id)
+      self.gripper.release()
+      
+
+
+    # Add workspace.
+    plane_shape = pybullet.createCollisionShape(pybullet.GEOM_BOX, halfExtents=[0.3, 0.3, 0.001])
+    plane_visual = pybullet.createVisualShape(pybullet.GEOM_BOX, halfExtents=[0.3, 0.3, 0.001])
+    plane_id = pybullet.createMultiBody(0, plane_shape, plane_visual, basePosition=[0, -0.5, 0])
+    pybullet.changeVisualShape(plane_id, -1, rgbaColor=[0.2, 0.2, 0.2, 1.0])
+    if self.task is not None:
+      self.task.reset(self,pos_dict=pos_list)
+    if self.ee_type == "suction":
+      obj_ids = []
+      for key in self.obj_name_to_id.keys():
+        if key in self.task.config['pick']:
+          obj_ids.append(self.obj_name_to_id[key])
+      # print("obj_ids",obj_ids)  
+      self.gripper.set_objid(obj_ids)
+
+    # arm init position
+    pybullet.configureDebugVisualizer(pybullet.COV_ENABLE_RENDERING, 1)
+    pybullet.resetDebugVisualizerCamera(cameraDistance=1,
+                                    cameraYaw=0,
+                                    cameraPitch=-75,
+                                    cameraTargetPosition=[0, -0.5, 0])
+    place_xyz = np.float32([0, -0.2, 0.25])
+    ee_xyz = np.float32(pybullet.getLinkState(self.robot_id, self.tip_link_id)[0])
+
+    while np.linalg.norm(place_xyz - ee_xyz) > 0.01:
+      self.movep(place_xyz)
+      self.step_sim_and_render()
+      ee_xyz = np.float32(pybullet.getLinkState(self.robot_id, self.tip_link_id)[0])
+
+    for _ in range(100):
+      pybullet.stepSimulation()
+    
+
+    # Get observation.
+    self.pos_list = None
+    obs = self.get_observation()
+    self.reset_reward(obs)
+    # self.obj_pos = self.get_object_position()
+    
+    # print("lang goal",self.lang_goal)
+    self.step_count = 0
+    return obs,{}
   
   def get_object_position(self):
     obj_pos = {}

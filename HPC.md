@@ -36,7 +36,7 @@ sbatch train.sbatch
 
 ## Current jobid
 - 9157701
-- 9159809
+- 9159811
 
 
 ## Other commands
