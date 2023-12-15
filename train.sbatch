@@ -3,7 +3,7 @@
 #SBATCH --partition=general
 #SBATCH --qos=medium
 #SBATCH --ntasks=1
-#SBATCH --time=35:59:00
+#SBATCH --time=20:59:00
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=16000
 #SBATCH --mail-type=END
