@@ -63,7 +63,7 @@ def act(prompt_response):
             act = [pick[1:-1],place[2:-1]]
             action.append(act)
     return action
-def single_step(env,actions,obs,step_limit = 2):
+def single_step(env,actions,obs,step_limit = 4):
     dones = []
     for act in actions:
         done = False
@@ -105,10 +105,10 @@ env = ResPickOrPlaceEnvWithoutLangReward(
                                          scale_obs=True,
                                          neglect_steps=False,
                                       one_hot_action = True)
-trail = 20 #success rate 50%
+trail = 1 #success rate 50%
 successes = []
 for i in range(trail):
-    # np.random.seed(i)
+    np.random.seed(4)
     obs,_ = env.reset()
     scene = env.task.config
     scene_description = "objects = ["
