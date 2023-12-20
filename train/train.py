@@ -39,7 +39,7 @@ def train():
     # Parse arguments
     args = parser.parse_args()
     seed = args.seed
-    set_random_seed(seed,using_cuda=True)
+    
     render = args.render
     save = args.save
     iters = args.iters
@@ -47,8 +47,10 @@ def train():
     device = args.device
     if device == 0:
         device = "cuda"
+        set_random_seed(seed,using_cuda=True)
     else:
         device = "cpu"
+        set_random_seed(seed,using_cuda=False)
     print("render: ",render)
 
 
@@ -57,6 +59,7 @@ def train():
     task_name = "PutLetterontheBowl"
     # task_name = "PutblockonBowlSameColor"
     ep = (args.ep,"fixed")
+    print("ep: ",ep)
     # ep = (1,"fixed")
     name =policy_name+"_"+task_name+"ep"+str(ep[0])+"seed"+str(seed)+"_model"
     if save:
