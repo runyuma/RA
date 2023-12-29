@@ -19,14 +19,14 @@ module load miniconda/3.9
 conda activate ra
 
 cd /tudelft.net/staff-umbrella/rarma/src/RA/
-python train/train_long.py --render f --save t --seed {seed} --iters 80000 --save_freq 2500 --device 1 --ep {ep}
+python train/train_long_letter.py --render f --save t --seed {seed} --iters 80000 --save_freq 2500 --device 1 --ep {ep}
 """
 
 # Create files
 for seed in seeds:
     for ep in eps:
         # Create a filename based on the seed and ep
-        filename = f"sbatch/long/train_{seed}_{ep}.sh"
+        filename = f"sbatch/letter_long/train_{seed}_{ep}.sh"
         
         # Replace placeholders in the template
         file_content = template.format(seed=seed, ep=ep)

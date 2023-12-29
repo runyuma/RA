@@ -7,13 +7,14 @@ import numpy as np
 
 # import matplotlib.pyplot as plt
 from environments.utils import mouse_demo
-from tasks.letter import PutLetterOontheBowl,PutLetterontheBowl,PutblockonBowlSameColor
+from tasks.letter import PutLetterOontheBowl,PutLetterontheBowl,PutblockonBowlSameColor,PutLetteronBowlSameColor
 import cv2
 import matplotlib
 matplotlib.use('TKAgg')
 import matplotlib.pyplot as plt
 task = PutLetterontheBowl
 task = PutblockonBowlSameColor
+task = PutLetteronBowlSameColor
 env = ResPickOrPlaceEnvWithoutLangReward(
                                         task= task,
                                          image_obs=True,

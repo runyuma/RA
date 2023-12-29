@@ -10,7 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from environments.utils import mouse_demo
 from tasks.task import PutBlockInBowl
-from tasks.letter import Letter
+from tasks.letter import Letter,PutLetteronBowlSameColor
 import cv2
 import sys
 
@@ -18,7 +18,7 @@ one_hot = True
 residual = True
 # env = ResSimplifyPickOrPlaceEnvWithoutLangReward(render=True,multi_discrete=True,scale_action=True,ee = "suction",scale_obs=True,one_hot_action = True)
 env = ResPickOrPlaceEnvWithoutLangReward(
-                                        task= Letter,
+                                        task= PutLetteronBowlSameColor,
                                          image_obs=True,
                                          residual=residual,
                                          observation_noise=5,
