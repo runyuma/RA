@@ -18,7 +18,7 @@ ssh login1.hpc.tudelft.nl
 ```
 ### cd to your home directory
 ```bash
- cd "/tudelft.net/staff-umbrella/rarma"
+cd "/tudelft.net/staff-umbrella/rarma"
 ```
 ### conda 
 ```

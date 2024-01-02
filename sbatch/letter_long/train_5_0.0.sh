@@ -3,8 +3,8 @@
 #SBATCH --partition=general
 #SBATCH --qos=long
 #SBATCH --ntasks=1
-#SBATCH --time=80:00:00
-#SBATCH --cpus-per-task=4
+#SBATCH --time=120:00:00
+#SBATCH --cpus-per-task=2
 #SBATCH --mem=16000
 #SBATCH --mail-type=END
 

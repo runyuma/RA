@@ -29,7 +29,7 @@ def train():
 
     # Add arguments
     parser.add_argument('--seed', type=int, default=4, help='Random seed.')
-    parser.add_argument('--iters', type=int, default=80000, help='Number of iterations.')
+    parser.add_argument('--iters', type=int, default=160000, help='Number of iterations.')
     parser.add_argument('--save', type=str2bool, default=True, help='Whether to save the model.')
     parser.add_argument('--render', type=str2bool, default=False, help='Whether to render the environment.')
     parser.add_argument('--save_freq', type=int, default=2500, help='save frequency')
