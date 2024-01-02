@@ -15,4 +15,4 @@ module load miniconda/3.9
 conda activate ra
 
 cd /tudelft.net/staff-umbrella/rarma/src/RA/
-python train/train_long_letter.py --render f --save t --seed 2 --iters 80000 --save_freq 2500 --device 1 --ep 0.0
+python train/train_long_letter.py --render f --save t --seed 2 --iters 160000 --save_freq 2500 --device 1 --ep 0.0
