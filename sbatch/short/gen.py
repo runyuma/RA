@@ -19,7 +19,7 @@ module load miniconda/3.9
 conda activate ra
 
 cd /tudelft.net/staff-umbrella/rarma/src/RA/
-python train/train.py--render f --save t --seed {seed} --iters 80000 --save_freq 2500 --device 1 --ep {ep}
+python train/train.py --render f --save t --seed {seed} --iters 80000 --save_freq 2500 --device 1 --ep {ep}
 """
 
 # Create files
